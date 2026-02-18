@@ -1,0 +1,360 @@
+
+{
+  "entities": {
+    "File": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "File",
+      "type": "object",
+      "description": "Represents a file and its associated metadata in the file tracking system.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the File entity."
+        },
+        "date": {
+          "type": "string",
+          "description": "The date the correspondence was received.",
+          "format": "date-time"
+        },
+        "dateCreated": {
+          "type": "string",
+          "description": "The original date the file was created.",
+          "format": "date-time"
+        },
+        "reportableDate": {
+          "type": "string",
+          "description": "The date to be used for reporting purposes. Updated when new activity is logged against the file.",
+          "format": "date-time"
+        },
+        "lastActivityAt": {
+          "type": "string",
+          "description": "The timestamp of the most recent activity on this file.",
+          "format": "date-time"
+        },
+        "viewedBy": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "format": "date-time" },
+          "description": "A map of user IDs to the timestamp of their last view of this file."
+        },
+        "pinnedBy": {
+          "type": "object",
+          "additionalProperties": { "type": "boolean" },
+          "description": "A map of attorney IDs to a boolean indicating if the file is pinned for them."
+        },
+        "fileNumber": {
+          "type": "string",
+          "description": "The file number assigned to the file."
+        },
+        "suitNumber": {
+          "type": "string",
+          "description": "The suit number associated with the file, if applicable."
+        },
+        "subject": {
+          "type": "string",
+          "description": "The subject or topic of the file."
+        },
+        "movementLog": {
+          "type": "string",
+          "description": "A log of the file's movement or history."
+        },
+        "attorney": {
+          "type": "string",
+          "description": "The attorney associated with the file."
+        },
+        "documentNo": {
+          "type": "string",
+          "description": "The document number associated with the file."
+        },
+        "remarks": {
+          "type": "string",
+          "description": "Any additional remarks or notes about the file."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Active", "Completed"],
+          "description": "The current lifecycle status of the case file."
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the case was marked as completed."
+        },
+        "isJudgmentDebt": {
+          "type": "boolean",
+          "description": "Flag to indicate if the case involves a judgment debt."
+        },
+        "amountInvolved": {
+          "type": "number",
+          "description": "The financial amount involved in GHC for judgment debt cases."
+        },
+        "milestones": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "isCompleted": { "type": "boolean" }
+            }
+          },
+          "description": "The progression steps for the case file."
+        },
+        "reminders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "text": { "type": "string" },
+              "date": { "type": "string", format: "date-time" },
+              "isCompleted": { "type": "boolean" }
+            }
+          }
+        },
+        "internalDrafts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "type": { "type": "string" },
+              "content": { "type": "string" },
+              "date": { "type": "string", format: "date-time" }
+            }
+          }
+        },
+        "internalInstructions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "text": { "type": "string" },
+              "from": { "type": "string" },
+              "to": { "type": "string" },
+              "date": { "type": "string", format: "date-time" }
+            }
+          }
+        },
+        "requests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "requesterName": { "type": "string" },
+              "requesterId": { "type": "string" },
+              "requestedAt": { "type": "string", format: "date-time" }
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "date",
+        "fileNumber",
+        "subject"
+      ]
+    },
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents an administrative user of the application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity, matching the Firebase Auth UID."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The email address of the user."
+        },
+        "fullName": {
+          "type": "string",
+          "description": "The full name of the user."
+        },
+        "phoneNumber": {
+          "type": "string",
+          "description": "The WhatsApp-enabled phone number of the user."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "staff"],
+          "description": "The access level of the user."
+        },
+        "passwordChangeRequired": {
+          "type": "boolean",
+          "description": "Flag to indicate if the user must change their password on the next login."
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "fullName"
+      ]
+    },
+    "Attorney": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Attorney",
+      "type": "object",
+      "description": "Represents a legal practitioner in the system registry.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "fullName": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "phoneNumber": {
+          "type": "string",
+          "description": "WhatsApp-enabled phone number."
+        },
+        "accessId": {
+          "type": "string",
+          "description": "Generated alphanumeric ID for portal access."
+        },
+        "rank": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "fullName",
+        "accessId"
+      ]
+    },
+    "AuditLog": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Audit Log",
+      "type": "object",
+      "description": "Represents a single user activity event for auditing purposes.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the log entry."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The date and time the action occurred."
+        },
+        "userEmail": {
+          "type": "string",
+          "description": "The email of the user who performed the action."
+        },
+        "action": {
+          "type": "string",
+          "description": "A short code representing the action performed."
+        },
+        "details": {
+          "type": "string",
+          "description": "A human-readable description of the action taken."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "userEmail",
+        "action",
+        "details"
+      ]
+    },
+    "Letter": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Letter",
+      "type": "object",
+      "description": "Represents a piece of unassigned correspondence.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      }
+    },
+    "Reminder": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Reminder",
+      "type": "object",
+      "description": "Represents a general or personal reminder for an attorney.",
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "date": { "type": "string", format: "date-time" },
+        "isCompleted": { "type": "boolean" },
+        "attorneyId": { "type": "string" },
+        "attorneyName": { "type": "string" }
+      },
+      "required": ["id", "text", "date", "attorneyId"]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores administrative staff profiles."
+        }
+      },
+      {
+        "path": "/attorneys/{attorneyId}",
+        "definition": {
+          "entityName": "Attorney",
+          "schema": {
+            "$ref": "#/backend/entities/Attorney"
+          },
+          "description": "Stores the registry of attorneys."
+        }
+      },
+      {
+        "path": "/files/{fileId}",
+        "definition": {
+          "entityName": "File",
+          "schema": {
+            "$ref": "#/backend/entities/File"
+          },
+          "description": "Stores all case files."
+        }
+      },
+      {
+        "path": "/reminders/{reminderId}",
+        "definition": {
+          "entityName": "Reminder",
+          "schema": {
+            "$ref": "#/backend/entities/Reminder"
+          },
+          "description": "Stores general/personal reminders for practitioners."
+        }
+      }
+    ],
+    "reasoning": "Financial metadata (isJudgmentDebt, amountInvolved) added to File entity to allow tracking of the state's financial exposure in civil litigation."
+  }
+}

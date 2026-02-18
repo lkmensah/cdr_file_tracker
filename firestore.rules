@@ -1,0 +1,45 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{userId} {
+      function isOwner() {
+        return request.auth.uid == userId;
+      }
+      allow get, update, delete: if isOwner();
+      allow create: if request.auth.uid == userId && request.resource.data.id == userId;
+      allow list: if request.auth != null;
+    }
+
+    match /attorneys/{attorneyId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /files/{fileId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /archives/{archiveId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /census/{censusId} {
+        allow read, write: if request.auth != null;
+    }
+
+    match /unassignedLetters/{letterId} {
+        allow read, write: if request.auth != null;
+    }
+
+    match /reminders/{reminderId} {
+        allow read, write: if request.auth != null;
+    }
+
+    match /auditLogs/{logId} {
+      allow create: if request.auth != null;
+      allow list, get: if request.auth != null;
+      allow update, delete: if false;
+    }
+  }
+}
