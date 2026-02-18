@@ -461,7 +461,7 @@ export default function ReportPage() {
                     <Label>Report Period</Label>
                     <RadioGroup
                         value={reportType}
-                        onValueChange={(value) => setReportType(value as any)}
+                        onOpenChange={(value) => setReportType(value as any)}
                         className="flex flex-col sm:flex-row flex-wrap gap-4"
                     >
                         <div className="flex items-center space-x-2">
@@ -516,7 +516,7 @@ export default function ReportPage() {
                             {reportType === 'quarterly' && (
                                 <div className="flex flex-col space-y-2">
                                 <Label htmlFor="quarter-select">Quarter</Label>
-                                <Select value={selectedQuarter} onValueChange={setSelectedQuarter}>
+                                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                                         <SelectTrigger id="quarter-select">
                                             <SelectValue placeholder="Select quarter" />
                                         </SelectTrigger>
