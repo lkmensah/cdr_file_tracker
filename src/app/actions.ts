@@ -16,8 +16,6 @@ async function verifyAndGetUser(clientToken: string): Promise<{decodedToken: Dec
     try {
         const decodedToken = await adminAuth.verifyIdToken(clientToken);
         const userRecord = await adminAuth.getUser(decodedToken.uid);
-
-        // Prioritize displayName from the Auth record, then the token, then email.
         const fullName = userRecord.displayName || decodedToken.name || decodedToken.email;
         if (!fullName) {
           throw new Error('User name could not be determined.');
@@ -29,7 +27,6 @@ async function verifyAndGetUser(clientToken: string): Promise<{decodedToken: Dec
     }
 }
 
-
 const NewFileSchema = z.object({
     fileNumber: z.string().min(1, 'File number is required.'),
     suitNumber: z.string(),
@@ -38,6 +35,7 @@ const NewFileSchema = z.object({
     subject: z.string().min(1, 'Subject is required.'),
     dateCreated: z.string().min(1, 'Date created is required.'),
     assignedTo: z.string().optional(),
+    coAssignees: z.string().optional(), // Expected as comma separated string from form
     isJudgmentDebt: z.string().optional(),
     amountGHC: z.string().optional(),
     amountUSD: z.string().optional(),
@@ -48,7 +46,6 @@ const UpdateFileSchema = NewFileSchema.extend({
     treatAsNew: z.string().optional(),
 });
 
-// Base schema for correspondence data
 const BaseCorrespondenceSchema = z.object({
   date: z.string(),
   dateOnLetter: z.string().optional(),
@@ -66,8 +63,6 @@ const BaseCorrespondenceSchema = z.object({
   scanUrl: z.string().optional(),
 });
 
-
-// Schema for adding new correspondence with refinement logic
 const AddCorrespondenceSchema = BaseCorrespondenceSchema.refine(data => {
     if (!data.fileNumber && (data.type === 'Incoming' || data.type === 'Court Process') && !data.documentNo) {
         return false;
@@ -78,12 +73,9 @@ const AddCorrespondenceSchema = BaseCorrespondenceSchema.refine(data => {
     path: ['documentNo'],
 });
 
-
-// Schema for updating an unassigned letter
 const UpdateUnassignedLetterSchema = BaseCorrespondenceSchema.extend({
     id: z.string().min(1, 'Letter ID is required'),
 });
-
 
 const MoveFileSchema = z.object({
     fileNumber: z.string().min(1, 'File number is required.'),
@@ -130,7 +122,6 @@ const UpdateCensusRecordSchema = NewCensusRecordSchema.extend({
     id: z.string().min(1, 'Record ID is required.'),
 });
 
-
 export async function createFile(
     clientToken: string,
     formData: FormData
@@ -145,10 +136,13 @@ export async function createFile(
         return { message: firstError || 'Failed to create file.' };
     }
     
-    const fileData = validatedFields.data;
+    const fileData = {
+        ...validatedFields.data,
+        coAssignees: validatedFields.data.coAssignees ? validatedFields.data.coAssignees.split(',').filter(Boolean) : []
+    };
 
     try {
-        const result = await db.createFile(fileData as Parameters<typeof db.createFile>[0]);
+        const result = await db.createFile(fileData);
         if (result.error) {
             return { message: result.error };
         }
@@ -174,20 +168,22 @@ export async function updateFile(
         return { message: firstError || 'Failed to update file.' };
     }
     
-    const fileData = validatedFields.data;
+    const fileData = {
+        ...validatedFields.data,
+        coAssignees: validatedFields.data.coAssignees ? validatedFields.data.coAssignees.split(',').filter(Boolean) : []
+    };
 
     try {
-        const result = await db.updateFile(fileData as Parameters<typeof db.updateFile>[0]);
+        const result = await db.updateFile(fileData);
         if (result.error) {
             return { message: result.error };
         }
         
-        // Log detailed reassignment changes
         const metaDetails = [];
         if (fileData.assignedTo) metaDetails.push(`Lead: ${fileData.assignedTo}`);
-        if (fileData.group) metaDetails.push(`Group: ${fileData.group}`);
+        if (fileData.coAssignees.length > 0) metaDetails.push(`Team: ${fileData.coAssignees.join(', ')}`);
         
-        const logMsg = `Updated file ${fileData.fileNumber}${metaDetails.length > 0 ? ` (${metaDetails.join(', ')})` : ''}`;
+        const logMsg = `Updated file ${fileData.fileNumber}${metaDetails.length > 0 ? ` (${metaDetails.join('. ')})` : ''}`;
         await logUserActivity(fullName, 'UPDATE_FILE', logMsg);
         
         revalidatePath('/files');
@@ -240,7 +236,6 @@ export async function deleteFile(clientToken: string, id: string): Promise<{mess
         return { message: 'Database error.' };
     }
 }
-
 
 export async function addCorrespondence(
   clientToken: string,
@@ -700,8 +695,6 @@ export async function deleteCensusRecord(clientToken: string, id: string): Promi
         return { message: 'Database error.' };
     }
 }
-
-// ATTORNEY PORTAL ACTIONS
 
 export async function addInternalDraft(clientToken: string, fileNumber: string, draftData: any) {
     await verifyAndGetUser(clientToken);

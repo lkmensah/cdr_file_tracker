@@ -57,9 +57,14 @@
           "type": "string",
           "description": "A log of the file's movement or history."
         },
-        "attorney": {
+        "assignedTo": {
           "type": "string",
-          "description": "The attorney associated with the file."
+          "description": "The primary lead attorney associated with the file."
+        },
+        "coAssignees": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of names of secondary attorneys assigned to the case team."
         },
         "documentNo": {
           "type": "string",
@@ -83,9 +88,13 @@
           "type": "boolean",
           "description": "Flag to indicate if the case involves a judgment debt."
         },
-        "amountInvolved": {
+        "amountGHC": {
           "type": "number",
           "description": "The financial amount involved in GHC for judgment debt cases."
+        },
+        "amountUSD": {
+          "type": "number",
+          "description": "The financial amount involved in USD for judgment debt cases."
         },
         "milestones": {
           "type": "array",
@@ -355,6 +364,6 @@
         }
       }
     ],
-    "reasoning": "Financial metadata (isJudgmentDebt, amountInvolved) added to File entity to allow tracking of the state's financial exposure in civil litigation."
+    "reasoning": "Co-assignees added to File entity to allow collaborative legal teams to work on the same record while keeping a single source of truth."
   }
 }

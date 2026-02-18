@@ -102,6 +102,7 @@ export const createFile = async (fileData: any): Promise<{ file?: Correspondence
         requests: [],
         milestones: defaultMilestones,
         attachments: [],
+        coAssignees: Array.isArray(fileData.coAssignees) ? fileData.coAssignees : (fileData.coAssignees?.split(',').filter(Boolean) || []),
         isJudgmentDebt: fileData.isJudgmentDebt === 'on' || fileData.isJudgmentDebt === true,
         amountGHC: fileData.amountGHC ? parseFloat(fileData.amountGHC) : 0,
         amountUSD: fileData.amountUSD ? parseFloat(fileData.amountUSD) : 0,
@@ -120,6 +121,7 @@ export const updateFile = async (fileData: any): Promise<{ file?: Correspondence
     const updateData: any = { 
         ...fileData, 
         lastActivityAt: FieldValue.serverTimestamp(),
+        coAssignees: Array.isArray(fileData.coAssignees) ? fileData.coAssignees : (fileData.coAssignees?.split(',').filter(Boolean) || []),
         isJudgmentDebt: fileData.isJudgmentDebt === 'on' || fileData.isJudgmentDebt === true,
         amountGHC: fileData.amountGHC ? parseFloat(fileData.amountGHC) : 0,
         amountUSD: fileData.amountUSD ? parseFloat(fileData.amountUSD) : 0,
@@ -128,7 +130,6 @@ export const updateFile = async (fileData: any): Promise<{ file?: Correspondence
     if (fileData.dateCreated) updateData.dateCreated = new Date(fileData.dateCreated);
     if (fileData.treatAsNew === 'on') updateData.reportableDate = new Date();
     
-    // Detect Assignment/Group Changes and create automatic Movement
     const hasAssigneeChanged = fileData.assignedTo && oldData.assignedTo !== fileData.assignedTo;
     const hasGroupChanged = fileData.group && oldData.group !== fileData.group;
 
@@ -141,7 +142,6 @@ export const updateFile = async (fileData: any): Promise<{ file?: Correspondence
         };
         updateData.movements = FieldValue.arrayUnion(newMovement);
         
-        // Clear requests for the new assignee if they had any
         const currentRequests = oldData.requests || [];
         updateData.requests = currentRequests.filter((r: any) => r.requesterName !== (fileData.assignedTo || ''));
     }
@@ -380,7 +380,6 @@ export const batchMoveFiles = async (data: any) => {
                 lastActivityAt: FieldValue.serverTimestamp()
             };
 
-            // NEW: Support for bulk assignment/linking to group heads
             if (data.group) updatePayload.group = data.group;
             if (data.assignedTo) updatePayload.assignedTo = data.assignedTo;
 
@@ -396,7 +395,6 @@ export const batchPickupFiles = async (fileNumbers: string[], receivedBy: string
     const batch = firestore.batch();
     const now = new Date();
     
-    // Summary mapping for WhatsApp notifications
     const pickupResults: Record<string, { fullName: string, phoneNumber: string, files: { fileNumber: string, subject: string }[] }> = {};
 
     const attorneySnap = await getAttorneyCollectionRef().get();
@@ -409,7 +407,6 @@ export const batchPickupFiles = async (fileNumbers: string[], receivedBy: string
             const fileData = doc.data();
             const movements = fileData.movements || [];
             
-            // 1. Identify previous possessor for notification
             const sortedMovements = [...movements].sort((a,b) => {
                 const dA = a.date instanceof Timestamp ? a.date.toDate() : new Date(a.date);
                 const dB = b.date instanceof Timestamp ? b.date.toDate() : new Date(b.date);
@@ -428,7 +425,6 @@ export const batchPickupFiles = async (fileNumbers: string[], receivedBy: string
                 }
             }
 
-            // 2. Add New Movement (Return to Registry & Auto-Acknowledge)
             const newMovement: Movement = {
                 id: `M-PICKUP-${Date.now()}-${Math.random().toString(36).substring(2,7)}`,
                 date: now,
@@ -441,7 +437,7 @@ export const batchPickupFiles = async (fileNumbers: string[], receivedBy: string
             batch.update(doc.ref, {
                 movements: FieldValue.arrayUnion(newMovement),
                 lastActivityAt: FieldValue.serverTimestamp(),
-                requests: [] // Clear all pending file requests
+                requests: []
             });
         }
     }
@@ -714,10 +710,6 @@ export const updateAttorney = async (id: string, data: any) => {
     await getAttorneyCollectionRef().doc(id).update(data);
 };
 
-/**
- * Propagates an attorney name change across all system entities.
- * This ensures consistency in file assignments, movements, and portal filters.
- */
 export const propagateAttorneyNameChange = async (oldName: string, newName: string) => {
     const firestore = getFirestore(initializeAdmin());
     const filesSnapshot = await getFileCollectionRef().get();
@@ -726,24 +718,30 @@ export const propagateAttorneyNameChange = async (oldName: string, newName: stri
     
     const normalizedOld = oldName.toLowerCase().trim();
 
-    // 1. Update Census Records
     censusSnapshot.docs.forEach(doc => {
         batch.update(doc.ref, { attorney: newName });
     });
 
-    // 2. Update Case Files (Complex arrays require iteration)
     filesSnapshot.docs.forEach(doc => {
         const data = doc.data();
         let changed = false;
         const updates: any = {};
 
-        // Lead Assignment
         if (data.assignedTo?.toLowerCase().trim() === normalizedOld) {
             updates.assignedTo = newName;
             changed = true;
         }
 
-        // Physical Movements
+        if (data.coAssignees) {
+            const newCo = data.coAssignees.map((name: string) => 
+                name.toLowerCase().trim() === normalizedOld ? newName : name
+            );
+            if (JSON.stringify(newCo) !== JSON.stringify(data.coAssignees)) {
+                updates.coAssignees = newCo;
+                changed = true;
+            }
+        }
+
         if (data.movements) {
             const newMovements = data.movements.map((m: any) => {
                 let mChanged = false;
@@ -755,7 +753,6 @@ export const propagateAttorneyNameChange = async (oldName: string, newName: stri
             if (changed) updates.movements = newMovements;
         }
 
-        // Internal Instructions
         if (data.internalInstructions) {
             const newInstructions = data.internalInstructions.map((i: any) => {
                 let iChanged = false;
@@ -770,7 +767,6 @@ export const propagateAttorneyNameChange = async (oldName: string, newName: stri
             if (changed) updates.internalInstructions = newInstructions;
         }
 
-        // Pending Requests
         if (data.requests) {
             const newRequests = data.requests.map((r: any) => {
                 if (r.requesterName?.toLowerCase().trim() === normalizedOld) {

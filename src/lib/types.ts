@@ -97,7 +97,8 @@ export type CorrespondenceFile = {
   lastActivityAt?: Date;
   viewedBy?: Record<string, any>;
   pinnedBy?: Record<string, boolean>;
-  assignedTo?: string;
+  assignedTo?: string; // Primary Lead
+  coAssignees?: string[]; // Team Members
   letters: Letter[];
   movements: Movement[];
   status?: 'Active' | 'Completed';

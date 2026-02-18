@@ -40,6 +40,8 @@ import { Checkbox } from './ui/checkbox';
 import { collection, query, orderBy } from 'firebase/firestore';
 import { Separator } from './ui/separator';
 import { Switch } from './ui/switch';
+import { ScrollArea } from './ui/scroll-area';
+import { Badge } from './ui/badge';
 
 const FormSchema = z.object({
   id: z.string().optional(),
@@ -50,6 +52,7 @@ const FormSchema = z.object({
   subject: z.string().min(1, 'Subject is required.'),
   dateCreated: z.date({ required_error: 'Date created is required.' }),
   assignedTo: z.string().optional(),
+  coAssignees: z.array(z.string()).default([]),
   userEmail: z.string().email(),
   treatAsNew: z.boolean().optional(),
   isJudgmentDebt: z.boolean().optional(),
@@ -96,7 +99,6 @@ const toDate = (value: any): Date | null => {
     return null;
 };
 
-
 export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOpenChange, file }: NewFileProps) {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -108,7 +110,6 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
   const setIsOpen = isControlled ? controlledOnOpenChange : setInternalIsOpen;
   
   const isUpdateMode = !!file;
-
   const { toast } = useToast();
 
   const attorneysQuery = useMemoFirebase(
@@ -173,6 +174,7 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
       group: '',
       subject: '',
       assignedTo: '',
+      coAssignees: [],
       userEmail: user?.email || '',
       treatAsNew: false,
       isJudgmentDebt: false,
@@ -183,6 +185,8 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
 
   const selectedCategory = form.watch('category');
   const isJudgmentDebt = form.watch('isJudgmentDebt');
+  const leadAssignee = form.watch('assignedTo');
+  const coAssignees = form.watch('coAssignees');
   
   const showJudgmentDebtToggle = 
     selectedCategory === 'civil cases (local)' || 
@@ -201,6 +205,7 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
           subject: file.subject,
           dateCreated: toDate(file.dateCreated) || new Date(),
           assignedTo: file.assignedTo || '',
+          coAssignees: file.coAssignees || [],
           userEmail: user?.email || '',
           treatAsNew: false,
           isJudgmentDebt: file.isJudgmentDebt || false,
@@ -216,6 +221,7 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
           subject: '',
           dateCreated: new Date(),
           assignedTo: '',
+          coAssignees: [],
           userEmail: user?.email || '',
           treatAsNew: false,
           isJudgmentDebt: false,
@@ -232,6 +238,8 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
       if (value !== undefined && value !== null) {
           if (key === 'treatAsNew' || key === 'isJudgmentDebt') {
             if (value === true) formData.append(key, 'on');
+          } else if (key === 'coAssignees' && Array.isArray(value)) {
+            formData.append(key, value.join(','));
           } else {
             formData.append(key, value instanceof Date ? format(value, 'yyyy-MM-dd') : String(value));
           }
@@ -240,6 +248,15 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
 
     const action = isUpdateMode ? authUpdate : authCreate;
     await action(formData);
+  };
+
+  const handleToggleCoAssignee = (name: string) => {
+    const current = form.getValues('coAssignees');
+    if (current.includes(name)) {
+        form.setValue('coAssignees', current.filter(n => n !== name));
+    } else {
+        form.setValue('coAssignees', [...current, name]);
+    }
   };
 
   const handleWheel = (e: React.WheelEvent<HTMLInputElement>) => {
@@ -260,10 +277,7 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
         <DialogHeader>
           <DialogTitle>{isUpdateMode ? 'Edit File' : 'Create New File'}</DialogTitle>
           <DialogDescription>
-             {isUpdateMode 
-                ? 'Update metadata, group ownership, or practitioner assignments.'
-                : 'Enter the details for the new file.'}{' '}
-             Fields with <span className="text-red-500">*</span> are mandatory.
+             Update metadata, group ownership, or collaborative team assignments.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -330,7 +344,6 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
                                     value={field.value}
                                     onChange={(val) => {
                                         field.onChange(val);
-                                        // Reset judgment debt if category changes away from Civil
                                         if (val !== 'civil cases (local)' && val !== 'civil cases (int\'l)' && val !== 'civil cases (regions)') {
                                             form.setValue('isJudgmentDebt', false);
                                             form.setValue('amountGHC', '');
@@ -468,7 +481,7 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
 
             <div className="space-y-4">
                 <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                    <Users className="h-3 w-3" /> Assignment & Group Oversight
+                    <Users className="h-3 w-3" /> Team Assignment & Oversight
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
@@ -484,9 +497,6 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
                                     placeholder="Select group..."
                                     searchPlaceholder="Search groups..."
                                 />
-                                <p className="text-[9px] text-muted-foreground flex items-center gap-1 mt-1">
-                                    <Info className="h-2.5 w-2.5" /> Links file to Group Head visibility.
-                                </p>
                                 <FormMessage />
                             </FormItem>
                         )}
@@ -501,16 +511,45 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
                                     options={attorneyOptions}
                                     value={field.value}
                                     onChange={field.onChange}
-                                    placeholder="Select attorney..."
-                                    searchPlaceholder="Search attorneys..."
+                                    placeholder="Select lead..."
                                 />
-                                <p className="text-[9px] text-muted-foreground mt-1">
-                                    Primary person responsible for the case.
-                                </p>
                                 <FormMessage />
                             </FormItem>
                         )}
                     />
+                </div>
+
+                <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Collaborative Team (Co-Assignees)</Label>
+                    <div className="rounded-md border p-4 bg-muted/10 space-y-4">
+                        <div className="flex flex-wrap gap-2 mb-2 min-h-8">
+                            {coAssignees.length > 0 ? coAssignees.map(name => (
+                                <Badge key={name} variant="secondary" className="gap-1 px-2 py-1 bg-primary/10 text-primary border-primary/20">
+                                    {name}
+                                    <button type="button" onClick={() => handleToggleCoAssignee(name)} className="hover:text-destructive">×</button>
+                                </Badge>
+                            )) : (
+                                <span className="text-[10px] text-muted-foreground italic uppercase">No co-assignees selected</span>
+                            )}
+                        </div>
+                        <ScrollArea className="h-48 rounded border bg-background">
+                            <div className="p-2 space-y-1">
+                                {(attorneys || []).filter(a => a.fullName !== leadAssignee).map(a => (
+                                    <div key={a.id} className="flex items-center space-x-3 p-2 hover:bg-muted/50 rounded-md transition-colors">
+                                        <Checkbox 
+                                            id={`co-${a.id}`} 
+                                            checked={coAssignees.includes(a.fullName)}
+                                            onCheckedChange={() => handleToggleCoAssignee(a.fullName)}
+                                        />
+                                        <label htmlFor={`co-${a.id}`} className="text-sm font-medium leading-none cursor-pointer flex-1">
+                                            {a.fullName}
+                                            <span className="text-[10px] text-muted-foreground ml-2 uppercase font-bold">{a.rank}</span>
+                                        </label>
+                                    </div>
+                                ))}
+                            </div>
+                        </ScrollArea>
+                    </div>
                 </div>
             </div>
 
