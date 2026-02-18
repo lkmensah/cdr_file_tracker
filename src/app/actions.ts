@@ -1,3 +1,4 @@
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -807,6 +808,17 @@ export async function updateMilestones(clientToken: string, fileNumber: string, 
     try {
         await db.updateFileMilestones(fileNumber, milestones);
         return { success: true };
+    } catch (error: any) {
+        return { success: false, message: error.message };
+    }
+}
+
+export async function deleteFileAttachment(clientToken: string, fileNumber: string, attachmentId: string) {
+    await verifyAndGetUser(clientToken);
+    try {
+        await db.deleteFileAttachment(fileNumber, attachmentId);
+        revalidatePath('/files');
+        return { success: true, message: 'Attachment deleted.' };
     } catch (error: any) {
         return { success: false, message: error.message };
     }

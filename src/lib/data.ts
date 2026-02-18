@@ -167,6 +167,24 @@ export const addFileAttachment = async (fileNumber: string, attachment: Attachme
     });
 }
 
+export const deleteFileAttachment = async (fileNumber: string, attachmentId: string) => {
+    const snapshot = await getFileCollectionRef().where('fileNumber', '==', fileNumber).limit(1).get();
+    if (snapshot.empty) throw new Error('File not found.');
+    
+    const doc = snapshot.docs[0];
+    const data = doc.data();
+    const attachments = data.attachments || [];
+    
+    const updatedAttachments = attachments.filter((a: any) => a.id !== attachmentId);
+    
+    await doc.ref.update({
+        attachments: updatedAttachments,
+        lastActivityAt: FieldValue.serverTimestamp()
+    });
+    
+    return { success: true };
+}
+
 export const markFileAsViewed = async (id: string, viewerId: string): Promise<void> => {
     const fileRef = getFileCollectionRef().doc(id);
     await fileRef.update({

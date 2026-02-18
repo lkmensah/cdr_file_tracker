@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -47,7 +48,7 @@ import {
     FileDown,
     Banknote
 } from 'lucide-react';
-import { addInternalDraft, updateInternalDraft, deleteInternalDraft, addCaseReminder, toggleReminder, addInternalInstruction, markFileAsViewed, requestFile, toggleFilePin, toggleFileStatus, updateMilestones } from '@/app/actions';
+import { addInternalDraft, updateInternalDraft, deleteInternalDraft, addCaseReminder, toggleReminder, addInternalInstruction, markFileAsViewed, requestFile, toggleFilePin, toggleFileStatus, updateMilestones, deleteFileAttachment } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -136,11 +137,13 @@ export default function PortalFileDetail() {
     const { exec: authRequestFile } = useAuthAction(requestFile);
     const { exec: authToggleStatus } = useAuthAction(toggleFileStatus);
     const { exec: authUpdateMilestones } = useAuthAction(updateMilestones);
+    const { exec: authDeleteAttachment } = useAuthAction(deleteFileAttachment);
 
     const [draftTitle, setDraftTitle] = React.useState('');
     const [draftContent, setDraftContent] = React.useState('');
     const [editingDraftId, setEditingDraftId] = React.useState<string | null>(null);
     const [draftToDelete, setDraftToDelete] = React.useState<InternalDraft | null>(null);
+    const [attachmentToDelete, setAttachmentToDelete] = React.useState<Attachment | null>(null);
     const [reminderText, setReminderText] = React.useState('');
     const [instructionText, setInstructionText] = React.useState('');
     const [recipientType, setRecipientType] = React.useState<'lead' | 'registry' | 'attorney'>('lead');
@@ -293,6 +296,17 @@ export default function PortalFileDetail() {
         }
         setIsSubmitting(false);
     };
+
+    const handleDeleteAttachment = async (attachmentId: string) => {
+        if (!file) return;
+        setIsSubmitting(true);
+        const result = await authDeleteAttachment(file.fileNumber, attachmentId);
+        if (result.success) {
+            toast({ title: 'Attachment Deleted' });
+            setAttachmentToDelete(null);
+        }
+        setIsSubmitting(false);
+    }
 
     const handleExportDraft = async (draft: InternalDraft, type: 'letter' | 'memo') => {
         if (!file) return;
@@ -837,15 +851,28 @@ export default function PortalFileDetail() {
                                                             </p>
                                                         </div>
                                                     </div>
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="icon" 
-                                                        onClick={() => handleViewDocument(att)}
-                                                        className="hover:bg-primary/10 hover:text-primary shrink-0"
-                                                        title="View Document"
-                                                    >
-                                                        <Eye className="h-4 w-4" />
-                                                    </Button>
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            onClick={() => handleViewDocument(att)}
+                                                            className="hover:bg-primary/10 hover:text-primary h-8 w-8"
+                                                            title="View Document"
+                                                        >
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
+                                                        {!isCompleted && !isSG && !isHistoricalOnly && (
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                size="icon" 
+                                                                onClick={() => setAttachmentToDelete(att)}
+                                                                className="hover:bg-destructive/10 hover:text-destructive h-8 w-8"
+                                                                title="Delete Document"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                 </CardContent>
                                             </Card>
                                         )) : (
@@ -1113,6 +1140,28 @@ export default function PortalFileDetail() {
                         >
                             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                             Delete Draft
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={!!attachmentToDelete} onOpenChange={(open) => !open && setAttachmentToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Attachment?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to remove <strong>{attachmentToDelete?.name}</strong> from this case? This will delete the reference to this file.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={() => attachmentToDelete && handleDeleteAttachment(attachmentToDelete.id)} 
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            disabled={isSubmitting}
+                        >
+                            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                            Delete Attachment
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

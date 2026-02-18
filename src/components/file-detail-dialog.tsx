@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -26,7 +27,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Button } from './ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { unassignFromFile, confirmFileReceipt, deleteLetterFromFile, deleteMovementFromFile, updateLetterInFile, updateMovementInFile, addInternalInstruction, markFileAsViewed } from '@/app/actions';
+import { unassignFromFile, confirmFileReceipt, deleteLetterFromFile, deleteMovementFromFile, updateLetterInFile, updateMovementInFile, addInternalInstruction, markFileAsViewed, deleteFileAttachment } from '@/app/actions';
 import { useUser, useFirestore, useCollection, useMemoFirebase, useFirebase } from '@/firebase';
 import { useAuthAction } from '@/hooks/use-auth-action';
 import { CheckCircle2, Truck, UserCheck, Pencil, Trash2, Calendar as CalendarIcon, Loader2, MessageSquare, Send, Flag, Paperclip, Eye, FileIcon, AlertCircle, Banknote } from 'lucide-react';
@@ -591,13 +592,15 @@ const MovementDetails = ({ movement, index, total, fileNumber, fileSubject, isLa
 
 
 export function FileDetailDialog({ file: initialFile, isOpen, onOpenChange, onDataChange }: FileDetailDialogProps) {
-  const { profile } = useProfile();
+  const { profile, isAdmin } = useProfile();
   const { user } = useFirebase();
   const { toast } = useToast();
   const [inquiryText, setInquiryText] = React.useState('');
   const [isSendingInquiry, setIsInquirySubmitting] = React.useState(false);
+  const [attachmentToDelete, setAttachmentToDelete] = React.useState<Attachment | null>(null);
 
   const { exec: authAddInstruction } = useAuthAction(addInternalInstruction);
+  const { exec: authDeleteAttachment, isLoading: isDeletingAttachment } = useAuthAction(deleteFileAttachment);
 
   if (!initialFile) return null;
 
@@ -657,6 +660,18 @@ export function FileDetailDialog({ file: initialFile, isOpen, onOpenChange, onDa
     }
   };
 
+  const handleDeleteAttachment = async () => {
+    if (!attachmentToDelete || !initialFile) return;
+    try {
+        await authDeleteAttachment(initialFile.fileNumber, attachmentToDelete.id);
+        toast({ title: 'Attachment Deleted' });
+        setAttachmentToDelete(null);
+        onDataChange();
+    } catch (e) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete attachment.' });
+    }
+  };
+
   const formatCurrency = (amount: number = 0, currency: 'GHS' | 'USD' = 'GHS') => {
     return new Intl.NumberFormat('en-GH', {
         style: 'currency',
@@ -666,6 +681,7 @@ export function FileDetailDialog({ file: initialFile, isOpen, onOpenChange, onDa
 
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -817,9 +833,16 @@ export function FileDetailDialog({ file: initialFile, isOpen, onOpenChange, onDa
                                             </p>
                                         </div>
                                     </div>
-                                    <Button variant="ghost" size="icon" onClick={() => handleViewDocument(att)} title="View Document">
-                                        <Eye className="h-4 w-4" />
-                                    </Button>
+                                    <div className="flex items-center gap-1">
+                                        <Button variant="ghost" size="icon" onClick={() => handleViewDocument(att)} title="View Document">
+                                            <Eye className="h-4 w-4" />
+                                        </Button>
+                                        {(isAdmin || profile?.fullName === att.uploadedBy) && (
+                                            <Button variant="ghost" size="icon" onClick={() => setAttachmentToDelete(att)} className="text-destructive hover:bg-destructive/10" title="Delete Document">
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                    </div>
                                 </CardContent>
                             </Card>
                         )) : (
@@ -879,6 +902,25 @@ export function FileDetailDialog({ file: initialFile, isOpen, onOpenChange, onDa
         </div>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={!!attachmentToDelete} onOpenChange={(open) => !open && setAttachmentToDelete(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Delete Attachment?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    Are you sure you want to remove <strong>{attachmentToDelete?.name}</strong>? This action will permanently remove the document record from this file.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel disabled={isDeletingAttachment}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteAttachment} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isDeletingAttachment}>
+                    {isDeletingAttachment ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                    Delete Attachment
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 
