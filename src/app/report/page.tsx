@@ -70,6 +70,7 @@ const categories = [
     { value: 'judgment-debt', label: 'Judgment Debt Cases Only' },
     { value: 'civil cases (local)', label: 'Civil Cases (Local)' },
     { value: 'civil cases (int\'l)', label: 'Civil Cases (Int\'l)' },
+    { value: 'civil cases (regions)', label: 'Civil Cases (Regions)' },
     { value: 'garnishee', label: 'Garnishee' },
     { value: 'notice of intention', label: 'Notice of Intention' },
     { value: 'petition', label: 'Petition' },

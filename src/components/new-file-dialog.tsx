@@ -69,6 +69,7 @@ const MandatoryLabel = ({ children }: { children: React.ReactNode }) => (
 const categories = [
     { value: 'civil cases (local)', label: 'Civil Cases (Local)' },
     { value: 'civil cases (int\'l)', label: 'Civil Cases (Int\'l)' },
+    { value: 'civil cases (regions)', label: 'Civil Cases (Regions)' },
     { value: 'garnishee', label: 'Garnishee' },
     { value: 'notice of intention', label: 'Notice of Intention' },
     { value: 'petition', label: 'Petition' },
@@ -183,7 +184,10 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
   const selectedCategory = form.watch('category');
   const isJudgmentDebt = form.watch('isJudgmentDebt');
   
-  const showJudgmentDebtToggle = selectedCategory === 'civil cases (local)' || selectedCategory === 'civil cases (int\'l)';
+  const showJudgmentDebtToggle = 
+    selectedCategory === 'civil cases (local)' || 
+    selectedCategory === 'civil cases (int\'l)' || 
+    selectedCategory === 'civil cases (regions)';
 
   React.useEffect(() => {
     if (isOpen) {
@@ -327,7 +331,7 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
                                     onChange={(val) => {
                                         field.onChange(val);
                                         // Reset judgment debt if category changes away from Civil
-                                        if (val !== 'civil cases (local)' && val !== 'civil cases (int\'l)') {
+                                        if (val !== 'civil cases (local)' && val !== 'civil cases (int\'l)' && val !== 'civil cases (regions)') {
                                             form.setValue('isJudgmentDebt', false);
                                             form.setValue('amountGHC', '');
                                             form.setValue('amountUSD', '');

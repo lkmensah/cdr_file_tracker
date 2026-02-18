@@ -1,3 +1,4 @@
+
 "use client"
 
 import { Pie, PieChart, Cell, ResponsiveContainer } from "recharts"
@@ -29,6 +30,10 @@ const chartConfig = {
   "civil cases (int'l)": {
     label: "Civil Cases (Int'l)",
     color: "hsl(var(--chart-2))",
+  },
+  "civil cases (regions)": {
+    label: "Civil Cases (Regions)",
+    color: "hsl(var(--chart-4))",
   },
   "garnishee": {
     label: "Garnishee",
