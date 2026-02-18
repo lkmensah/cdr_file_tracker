@@ -466,8 +466,90 @@ export const createAttorney = async (data: any) => {
     return { id: docRef.id, accessId };
 };
 
+export const getAttorneyById = async (id: string): Promise<Attorney | null> => {
+    const doc = await getAttorneyCollectionRef().doc(id).get();
+    if (!doc.exists) return null;
+    return docToType<Attorney>(doc);
+};
+
 export const updateAttorney = async (id: string, data: any) => {
     await getAttorneyCollectionRef().doc(id).update(data);
+};
+
+/**
+ * Propagates an attorney name change across all system entities.
+ * This ensures consistency in file assignments, movements, and portal filters.
+ */
+export const propagateAttorneyNameChange = async (oldName: string, newName: string) => {
+    const firestore = getFirestore(initializeAdmin());
+    const filesSnapshot = await getFileCollectionRef().get();
+    const censusSnapshot = await getCensusCollectionRef().where('attorney', '==', oldName).get();
+    const batch = firestore.batch();
+    
+    const normalizedOld = oldName.toLowerCase().trim();
+
+    // 1. Update Census Records
+    censusSnapshot.docs.forEach(doc => {
+        batch.update(doc.ref, { attorney: newName });
+    });
+
+    // 2. Update Case Files (Complex arrays require iteration)
+    filesSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        let changed = false;
+        const updates: any = {};
+
+        // Lead Assignment
+        if (data.assignedTo?.toLowerCase().trim() === normalizedOld) {
+            updates.assignedTo = newName;
+            changed = true;
+        }
+
+        // Physical Movements
+        if (data.movements) {
+            const newMovements = data.movements.map((m: any) => {
+                let mChanged = false;
+                if (m.movedTo?.toLowerCase().trim() === normalizedOld) { m.movedTo = newName; mChanged = true; }
+                if (m.receivedBy?.toLowerCase().trim() === normalizedOld) { m.receivedBy = newName; mChanged = true; }
+                if (mChanged) changed = true;
+                return m;
+            });
+            if (changed) updates.movements = newMovements;
+        }
+
+        // Internal Instructions
+        if (data.internalInstructions) {
+            const newInstructions = data.internalInstructions.map((i: any) => {
+                let iChanged = false;
+                if (i.from?.toLowerCase().trim() === normalizedOld || i.from?.toLowerCase().includes(`(${normalizedOld})`)) { 
+                    i.from = i.from.replace(oldName, newName); 
+                    iChanged = true; 
+                }
+                if (i.to?.toLowerCase().trim() === normalizedOld) { i.to = newName; iChanged = true; }
+                if (iChanged) changed = true;
+                return i;
+            });
+            if (changed) updates.internalInstructions = newInstructions;
+        }
+
+        // Pending Requests
+        if (data.requests) {
+            const newRequests = data.requests.map((r: any) => {
+                if (r.requesterName?.toLowerCase().trim() === normalizedOld) {
+                    changed = true;
+                    return { ...r, requesterName: newName };
+                }
+                return r;
+            });
+            if (changed) updates.requests = newRequests;
+        }
+
+        if (changed) {
+            batch.update(doc.ref, { ...updates, lastActivityAt: FieldValue.serverTimestamp() });
+        }
+    });
+
+    await batch.commit();
 };
 
 export const updateUnassignedLetter = async (id: string, data: any) => {

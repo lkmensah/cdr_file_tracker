@@ -70,11 +70,26 @@ export async function updateAttorney(clientToken: string, formData: FormData) {
     if (!validated.success) return { message: validated.error.errors[0].message };
 
     try {
+        // Fetch current attorney to check for name changes
+        const currentAttorney = await db.getAttorneyById(id);
+        const nameChanged = currentAttorney && currentAttorney.fullName !== validated.data.fullName;
+
         await db.updateAttorney(id, validated.data);
-        await logUserActivity(userName, 'UPDATE_ATTORNEY', `Updated attorney: ${validated.data.fullName}`);
+
+        // If name changed, propagate this to all files and records
+        if (nameChanged) {
+            await db.propagateAttorneyNameChange(currentAttorney.fullName, validated.data.fullName);
+            await logUserActivity(userName, 'UPDATE_ATTORNEY_NAME', `Renamed attorney from ${currentAttorney.fullName} to ${validated.data.fullName}. System-wide records updated.`);
+        } else {
+            await logUserActivity(userName, 'UPDATE_ATTORNEY', `Updated attorney details: ${validated.data.fullName}`);
+        }
+
         revalidatePath('/attorneys');
+        revalidatePath('/census');
+        revalidatePath('/files');
         return { message: 'Success! Attorney updated.' };
     } catch (error) {
+        console.error("Propagation error:", error);
         return { message: 'Failed to update attorney.' };
     }
 }
