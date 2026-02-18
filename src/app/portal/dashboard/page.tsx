@@ -183,10 +183,13 @@ export default function PortalDashboard() {
         const myGroup = attorney.group?.toLowerCase().trim();
 
         allFiles.forEach(file => {
+            // Enhanced Search: File metadata + Team Member Names
             const isMatch = !searchTerm.trim() || 
                 file.fileNumber.toLowerCase().includes(term) ||
                 file.subject.toLowerCase().includes(term) ||
-                file.category.toLowerCase().includes(term);
+                file.category.toLowerCase().includes(term) ||
+                file.assignedTo?.toLowerCase().includes(term) ||
+                file.coAssignees?.some(name => name.toLowerCase().includes(term));
 
             if (!isMatch) return;
 
@@ -709,7 +712,7 @@ export default function PortalDashboard() {
                     <>
                         <div className="relative w-full max-w-2xl mx-auto px-2">
                             <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                            <Input placeholder={isSG ? "Search all active & completed files..." : "Search caseload..."} className="pl-12 h-12 text-lg shadow-sm bg-background border-primary/10 w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                            <Input placeholder={isSG ? "Search all active & completed files..." : "Search caseload by file, subject, or colleague..."} className="pl-12 h-12 text-lg shadow-sm bg-background border-primary/10 w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                         </div>
                         {notifications.length > 0 && !searchTerm && (
                             <section className="space-y-3 min-w-0">
@@ -744,7 +747,7 @@ export default function PortalDashboard() {
                     </>
                 ) : (
                     <Card className="shadow-sm overflow-hidden">
-                        <Header className="flex flex-col sm:flex-row items-center justify-between bg-muted/30 border-b gap-4"><div className="text-center sm:text-left"><CardTitle className="text-xl">{format(currentMonth, 'MMMM yyyy')}</CardTitle><CardDescription>Tracking {calendarEvents.length} active events</CardDescription></div><div className="flex items-center gap-2"><Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}><ChevronLeft className="h-4 w-4" /></Button><Button variant="outline" size="sm" onClick={() => setCurrentMonth(new Date())}>Today</Button><Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}><ChevronRightIcon className="h-4 w-4" /></Button></div></Header>
+                        <CardHeader className="flex flex-col sm:flex-row items-center justify-between bg-muted/30 border-b gap-4"><div className="text-center sm:text-left"><CardTitle className="text-xl">{format(currentMonth, 'MMMM yyyy')}</CardTitle><CardDescription>Tracking {calendarEvents.length} active events</CardDescription></div><div className="flex items-center gap-2"><Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}><ChevronLeft className="h-4 w-4" /></Button><Button variant="outline" size="sm" onClick={() => setCurrentMonth(new Date())}>Today</Button><Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}><ChevronRightIcon className="h-4 w-4" /></Button></div></CardHeader>
                         <CardContent className="p-0 overflow-x-auto"><div className="min-w-[600px]"><div className="grid grid-cols-7 border-b">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (<div key={day} className="p-2 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-muted/10">{day}</div>))}</div><div className="grid grid-cols-7">{calendarDays.map((day, idx) => { const dayEvents = calendarEvents.filter(e => isSameDay(e.date, day)); const isCurrentMonth = isSameMonth(day, monthStart); const isTodayDate = isToday(day); return ( <div key={day.toString()} className={cn("min-h-[120px] p-2 border-r border-b relative group hover:bg-primary/5 transition-colors min-w-0", !isCurrentMonth && "bg-muted/5 opacity-40", idx % 7 === 6 && "border-r-0")}><div className="flex justify-between items-start mb-2"><span className={cn("text-xs font-semibold rounded-full h-6 w-6 flex items-center justify-center", isTodayDate && "bg-primary text-primary-foreground")}>{format(day, 'd')}</span>{isCurrentMonth && (<Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handleOpenCreateDialog(day)}><Plus className="h-3 w-3" /></Button>)}</div><div className="space-y-1 overflow-hidden">{dayEvents.slice(0, 3).map(event => ( <div key={event.id} className={cn( "text-[9px] px-1.5 py-0.5 rounded border truncate leading-tight font-medium mb-0.5 cursor-pointer hover:brightness-95 transition-all", event.type === 'court' ? "bg-blue-50 text-blue-700 border-blue-100" : isPast(event.date) && !isToday(event.date) ? "bg-red-50 text-red-700 border-red-100" : "bg-green-50 text-green-700 border-green-100" )} onClick={() => { if (event.fileId) { window.location.href = `/portal/file/${event.fileId}`; } else { handleToggleReminder('General', event.id, true); } }} title={`${event.fileNumber}: ${event.text}`}><span className="font-bold mr-1">{event.fileNumber}:</span>{event.text}</div> ))}{dayEvents.length > 3 && <div className="text-[8px] text-center font-bold text-muted-foreground">+ {dayEvents.length - 3} more</div>}</div></div> ); })}</div></div></CardContent>
                     </Card>
                 )}

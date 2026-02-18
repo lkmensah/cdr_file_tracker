@@ -5,7 +5,7 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { FolderPlus, Loader2, Calendar as CalendarIcon, Building2, Info, Users, Briefcase, Banknote } from 'lucide-react';
+import { FolderPlus, Loader2, Calendar as CalendarIcon, Building2, Info, Users, Briefcase, Banknote, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -105,6 +105,7 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
   const firestore = useFirestore();
   const [internalIsOpen, setInternalIsOpen] = React.useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = React.useState(false);
+  const [coAssigneeSearch, setCoAssigneeSearch] = React.useState('');
 
   const isControlled = controlledIsOpen !== undefined && controlledOnOpenChange !== undefined;
   const isOpen = isControlled ? controlledIsOpen : internalIsOpen;
@@ -533,9 +534,25 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
                                 <span className="text-[10px] text-muted-foreground italic uppercase">No co-assignees selected</span>
                             )}
                         </div>
+                        <div className="relative">
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                            <Input 
+                                placeholder="Search attorneys to add..." 
+                                className="h-8 pl-8 text-xs bg-background" 
+                                value={coAssigneeSearch}
+                                onChange={(e) => setCoAssigneeSearch(e.target.value)}
+                            />
+                        </div>
                         <ScrollArea className="h-48 rounded border bg-background">
                             <div className="p-2 space-y-1">
-                                {(attorneys || []).filter(a => a.fullName !== leadAssignee).map(a => (
+                                {(attorneys || [])
+                                    .filter(a => a.fullName !== leadAssignee)
+                                    .filter(a => {
+                                        if (!coAssigneeSearch) return true;
+                                        const term = coAssigneeSearch.toLowerCase();
+                                        return a.fullName.toLowerCase().includes(term) || (a.rank && a.rank.toLowerCase().includes(term));
+                                    })
+                                    .map(a => (
                                     <div key={a.id} className="flex items-center space-x-3 p-2 hover:bg-muted/50 rounded-md transition-colors">
                                         <Checkbox 
                                             id={`co-${a.id}`} 
