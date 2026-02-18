@@ -247,6 +247,75 @@ export const addCorrespondence = async (data: any): Promise<{ file?: Corresponde
     }
 };
 
+export const updateUnassignedLetter = async (id: string, data: any) => {
+    const docRef = getUnassignedLettersCollectionRef().doc(id);
+    await docRef.update(data);
+    const updated = await docRef.get();
+    return { letter: docToType<Letter>(updated) };
+};
+
+export const deleteUnassignedLetter = async (id: string) => {
+    await getUnassignedLettersCollectionRef().doc(id).delete();
+    return { success: true };
+};
+
+export const assignToFile = async (data: any) => {
+    const letterRef = getUnassignedLettersCollectionRef().doc(data.letterId);
+    const letterSnap = await letterRef.get();
+    if (!letterSnap.exists) throw new Error("Letter not found.");
+    
+    const letterData = letterSnap.data()!;
+    const fileSnap = await getFileCollectionRef().where('fileNumber', '==', data.fileNumber).get();
+    if (fileSnap.empty) throw new Error("File not found.");
+    
+    const fileDoc = fileSnap.docs[0];
+    await fileDoc.ref.update({
+        letters: FieldValue.arrayUnion({ id: data.letterId, ...letterData, fileNumber: data.fileNumber }),
+        lastActivityAt: FieldValue.serverTimestamp()
+    });
+    await letterRef.delete();
+    return { success: true, letter: { id: data.letterId, ...letterData } };
+};
+
+export const unassignFromFile = async (data: any) => {
+    const fileSnap = await getFileCollectionRef().where('fileNumber', '==', data.fileNumber).get();
+    if (fileSnap.empty) throw new Error("File not found.");
+    
+    const fileDoc = fileSnap.docs[0];
+    const fileData = fileDoc.data()!;
+    const letterToRemove = fileData.letters?.find((l: any) => l.id === data.letterId);
+    if (!letterToRemove) throw new Error("Letter not found in file.");
+    
+    const { fileNumber, ...cleanLetterData } = letterToRemove;
+    await getUnassignedLettersCollectionRef().doc(data.letterId).set(cleanLetterData);
+    await fileDoc.ref.update({
+        letters: FieldValue.arrayRemove(letterToRemove),
+        lastActivityAt: FieldValue.serverTimestamp()
+    });
+    return { success: true, letter: cleanLetterData };
+};
+
+export const updateLetterInFile = async (fileNumber: string, letterId: string, data: any) => {
+    const fileSnap = await getFileCollectionRef().where('fileNumber', '==', fileNumber).get();
+    if (fileSnap.empty) throw new Error("File not found.");
+    const fileDoc = fileSnap.docs[0];
+    const letters = (fileDoc.data()!.letters || []).map((l: any) => {
+        if (l.id === letterId) return { ...l, ...data };
+        return l;
+    });
+    await fileDoc.ref.update({ letters, lastActivityAt: FieldValue.serverTimestamp() });
+    return { success: true };
+};
+
+export const deleteLetterFromFile = async (fileNumber: string, letterId: string) => {
+    const fileSnap = await getFileCollectionRef().where('fileNumber', '==', fileNumber).get();
+    if (fileSnap.empty) throw new Error("File not found.");
+    const fileDoc = fileSnap.docs[0];
+    const letters = (fileDoc.data()!.letters || []).filter((l: any) => l.id !== letterId);
+    await fileDoc.ref.update({ letters, lastActivityAt: FieldValue.serverTimestamp() });
+    return { success: true };
+};
+
 export const moveFile = async (data: any): Promise<{ file?: CorrespondenceFile, error?: string }> => {
     const q = getFileCollectionRef().where('fileNumber', '==', data.fileNumber);
     const fileSnapshot = await q.get();
@@ -271,6 +340,157 @@ export const moveFile = async (data: any): Promise<{ file?: CorrespondenceFile, 
     const updatedDoc = await fileDoc.ref.get();
     return { file: docToType<CorrespondenceFile>(updatedDoc) };
 }
+
+export const batchMoveFiles = async (data: any) => {
+    const batch = getFirestore(initializeAdmin()).batch();
+    const newMovement: Movement = {
+        id: `M-${Date.now()}`,
+        date: new Date(data.date),
+        movedTo: data.movedTo,
+        status: data.status,
+    };
+
+    for (const fileNum of data.fileNumbers) {
+        const snap = await getFileCollectionRef().where('fileNumber', '==', fileNum).get();
+        if (!snap.empty) {
+            const doc = snap.docs[0];
+            const updatedRequests = (doc.data()!.requests || []).filter((r: any) => r.requesterName.toLowerCase().trim() !== data.movedTo.toLowerCase().trim());
+            
+            const updatePayload: any = {
+                movements: FieldValue.arrayUnion(newMovement),
+                requests: updatedRequests,
+                lastActivityAt: FieldValue.serverTimestamp()
+            };
+
+            // NEW: Support for bulk assignment/linking to group heads
+            if (data.group) updatePayload.group = data.group;
+            if (data.assignedTo) updatePayload.assignedTo = data.assignedTo;
+
+            batch.update(doc.ref, updatePayload);
+        }
+    }
+    await batch.commit();
+    return { success: true };
+};
+
+export const batchPickupFiles = async (fileNumbers: string[], receivedBy: string) => {
+    const firestore = getFirestore(initializeAdmin());
+    const batch = firestore.batch();
+    const now = new Date();
+    
+    // Summary mapping for WhatsApp notifications
+    const pickupResults: Record<string, { fullName: string, phoneNumber: string, files: { fileNumber: string, subject: string }[] }> = {};
+
+    const attorneySnap = await getAttorneyCollectionRef().get();
+    const attorneys = attorneySnap.docs.map(doc => docToType<Attorney>(doc));
+
+    for (const fileNum of fileNumbers) {
+        const snap = await getFileCollectionRef().where('fileNumber', '==', fileNum).limit(1).get();
+        if (!snap.empty) {
+            const doc = snap.docs[0];
+            const fileData = doc.data();
+            const movements = fileData.movements || [];
+            
+            // 1. Identify previous possessor for notification
+            const sortedMovements = [...movements].sort((a,b) => {
+                const dA = a.date instanceof Timestamp ? a.date.toDate() : new Date(a.date);
+                const dB = b.date instanceof Timestamp ? b.date.toDate() : new Date(b.date);
+                return dB.getTime() - dA.getTime();
+            });
+            const latest = sortedMovements[0];
+            const previousPossessor = latest?.movedTo || 'Registry';
+
+            if (previousPossessor.toLowerCase() !== 'registry') {
+                const att = attorneys.find(a => a.fullName.toLowerCase().trim() === previousPossessor.toLowerCase().trim());
+                if (att) {
+                    if (!pickupResults[att.id]) {
+                        pickupResults[att.id] = { fullName: att.fullName, phoneNumber: att.phoneNumber, files: [] };
+                    }
+                    pickupResults[att.id].files.push({ fileNumber: fileData.fileNumber, subject: fileData.subject });
+                }
+            }
+
+            // 2. Add New Movement (Return to Registry & Auto-Acknowledge)
+            const newMovement: Movement = {
+                id: `M-PICKUP-${Date.now()}-${Math.random().toString(36).substring(2,7)}`,
+                date: now,
+                movedTo: 'Registry',
+                status: 'Physically returned to Registry',
+                receivedAt: now,
+                receivedBy: receivedBy
+            };
+
+            batch.update(doc.ref, {
+                movements: FieldValue.arrayUnion(newMovement),
+                lastActivityAt: FieldValue.serverTimestamp(),
+                requests: [] // Clear all pending file requests
+            });
+        }
+    }
+    await batch.commit();
+    return { success: true, summary: Object.values(pickupResults) };
+};
+
+export const updateMovementInFile = async (fileNumber: string, movementId: string, data: any) => {
+    const snap = await getFileCollectionRef().where('fileNumber', '==', fileNumber).get();
+    if (snap.empty) throw new Error("File not found.");
+    const doc = snap.docs[0];
+    const movements = (doc.data()!.movements || []).map((m: any) => {
+        if (m.id === movementId) return { ...m, ...data, date: new Date(data.date) };
+        return m;
+    });
+    await doc.ref.update({ movements, lastActivityAt: FieldValue.serverTimestamp() });
+    return { success: true };
+};
+
+export const deleteMovementFromFile = async (fileNumber: string, movementId: string) => {
+    const snap = await getFileCollectionRef().where('fileNumber', '==', fileNumber).get();
+    if (snap.empty) throw new Error("File not found.");
+    const doc = snap.docs[0];
+    const movements = (doc.data()!.movements || []).filter((m: any) => m.id !== movementId);
+    await doc.ref.update({ movements, lastActivityAt: FieldValue.serverTimestamp() });
+    return { success: true };
+};
+
+export const confirmFileReceipt = async (fileNumber: string, movementId: string, receivedBy: string) => {
+    const snap = await getFileCollectionRef().where('fileNumber', '==', fileNumber).get();
+    if (snap.empty) throw new Error("File not found.");
+    const doc = snap.docs[0];
+    const movements = (doc.data()!.movements || []).map((m: any) => {
+        if (m.id === movementId) return { ...m, receivedAt: new Date(), receivedBy };
+        return m;
+    });
+    await doc.ref.update({ movements, lastActivityAt: FieldValue.serverTimestamp() });
+    return { success: true };
+};
+
+export const createArchiveRecord = async (data: any) => {
+    const docRef = await getArchiveCollectionRef().add(data);
+    return { id: docRef.id };
+};
+
+export const updateArchiveRecord = async (id: string, data: any) => {
+    await getArchiveCollectionRef().doc(id).update(data);
+};
+
+export const deleteArchiveRecord = async (id: string) => {
+    await getArchiveCollectionRef().doc(id).delete();
+    return { success: true };
+};
+
+export const createCensusRecord = async (data: any) => {
+    const docRef = await getCensusCollectionRef().add(data);
+    return { id: docRef.id };
+};
+
+export const updateCensusRecord = async (id: string, data: any) => {
+    await getCensusCollectionRef().doc(id).update(data);
+};
+
+export const deleteCensusRecord = async (id: string) => {
+    await getCensusCollectionRef().doc(id).delete();
+    return { success: true };
+};
 
 export const addInternalDraft = async (fileNumber: string, data: any) => {
     const q = getFileCollectionRef().where('fileNumber', '==', fileNumber);
@@ -550,224 +770,4 @@ export const propagateAttorneyNameChange = async (oldName: string, newName: stri
     });
 
     await batch.commit();
-};
-
-export const updateUnassignedLetter = async (id: string, data: any) => {
-    const docRef = getUnassignedLettersCollectionRef().doc(id);
-    await docRef.update(data);
-    const updated = await docRef.get();
-    return { letter: docToType<Letter>(updated) };
-};
-
-export const deleteUnassignedLetter = async (id: string) => {
-    await getUnassignedLettersCollectionRef().doc(id).delete();
-    return { success: true };
-};
-
-export const assignToFile = async (data: any) => {
-    const letterRef = getUnassignedLettersCollectionRef().doc(data.letterId);
-    const letterSnap = await letterRef.get();
-    if (!letterSnap.exists) throw new Error("Letter not found.");
-    
-    const letterData = letterSnap.data()!;
-    const fileSnap = await getFileCollectionRef().where('fileNumber', '==', data.fileNumber).get();
-    if (fileSnap.empty) throw new Error("File not found.");
-    
-    const fileDoc = fileSnap.docs[0];
-    await fileDoc.ref.update({
-        letters: FieldValue.arrayUnion({ id: data.letterId, ...letterData, fileNumber: data.fileNumber }),
-        lastActivityAt: FieldValue.serverTimestamp()
-    });
-    await letterRef.delete();
-    return { success: true, letter: { id: data.letterId, ...letterData } };
-};
-
-export const unassignFromFile = async (data: any) => {
-    const fileSnap = await getFileCollectionRef().where('fileNumber', '==', data.fileNumber).get();
-    if (fileSnap.empty) throw new Error("File not found.");
-    
-    const fileDoc = fileSnap.docs[0];
-    const fileData = fileDoc.data()!;
-    const letterToRemove = fileData.letters?.find((l: any) => l.id === data.letterId);
-    if (!letterToRemove) throw new Error("Letter not found in file.");
-    
-    const { fileNumber, ...cleanLetterData } = letterToRemove;
-    await getUnassignedLettersCollectionRef().doc(data.letterId).set(cleanLetterData);
-    await fileDoc.ref.update({
-        letters: FieldValue.arrayRemove(letterToRemove),
-        lastActivityAt: FieldValue.serverTimestamp()
-    });
-    return { success: true, letter: cleanLetterData };
-};
-
-export const updateLetterInFile = async (fileNumber: string, letterId: string, data: any) => {
-    const fileSnap = await getFileCollectionRef().where('fileNumber', '==', fileNumber).get();
-    if (fileSnap.empty) throw new Error("File not found.");
-    const fileDoc = fileSnap.docs[0];
-    const letters = (fileDoc.data()!.letters || []).map((l: any) => {
-        if (l.id === letterId) return { ...l, ...data };
-        return l;
-    });
-    await fileDoc.ref.update({ letters, lastActivityAt: FieldValue.serverTimestamp() });
-    return { success: true };
-};
-
-export const deleteLetterFromFile = async (fileNumber: string, letterId: string) => {
-    const fileSnap = await getFileCollectionRef().where('fileNumber', '==', fileNumber).get();
-    if (fileSnap.empty) throw new Error("File not found.");
-    const fileDoc = fileSnap.docs[0];
-    const letters = (fileDoc.data()!.letters || []).filter((l: any) => l.id !== letterId);
-    await fileDoc.ref.update({ letters, lastActivityAt: FieldValue.serverTimestamp() });
-    return { success: true };
-};
-
-export const batchMoveFiles = async (data: any) => {
-    const batch = getFirestore(initializeAdmin()).batch();
-    const newMovement: Movement = {
-        id: `M-${Date.now()}`,
-        date: new Date(data.date),
-        movedTo: data.movedTo,
-        status: data.status,
-    };
-
-    for (const fileNum of data.fileNumbers) {
-        const snap = await getFileCollectionRef().where('fileNumber', '==', fileNum).get();
-        if (!snap.empty) {
-            const doc = snap.docs[0];
-            const updatedRequests = (doc.data()!.requests || []).filter((r: any) => r.requesterName.toLowerCase().trim() !== data.movedTo.toLowerCase().trim());
-            
-            const updatePayload: any = {
-                movements: FieldValue.arrayUnion(newMovement),
-                requests: updatedRequests,
-                lastActivityAt: FieldValue.serverTimestamp()
-            };
-
-            // NEW: Support for bulk assignment/linking to group heads
-            if (data.group) updatePayload.group = data.group;
-            if (data.assignedTo) updatePayload.assignedTo = data.assignedTo;
-
-            batch.update(doc.ref, updatePayload);
-        }
-    }
-    await batch.commit();
-    return { success: true };
-};
-
-export const batchPickupFiles = async (fileNumbers: string[], receivedBy: string) => {
-    const firestore = getFirestore(initializeAdmin());
-    const batch = firestore.batch();
-    const now = new Date();
-    
-    // Summary mapping for WhatsApp notifications
-    const pickupResults: Record<string, { fullName: string, phoneNumber: string, files: { fileNumber: string, subject: string }[] }> = {};
-
-    const attorneySnap = await getAttorneyCollectionRef().get();
-    const attorneys = attorneySnap.docs.map(doc => docToType<Attorney>(doc));
-
-    for (const fileNum of fileNumbers) {
-        const snap = await getFileCollectionRef().where('fileNumber', '==', fileNum).limit(1).get();
-        if (!snap.empty) {
-            const doc = snap.docs[0];
-            const fileData = doc.data();
-            const movements = fileData.movements || [];
-            
-            // 1. Identify previous possessor for notification
-            const sortedMovements = [...movements].sort((a,b) => {
-                const dA = a.date instanceof Timestamp ? a.date.toDate() : new Date(a.date);
-                const dB = b.date instanceof Timestamp ? b.date.toDate() : new Date(b.date);
-                return dB.getTime() - dA.getTime();
-            });
-            const latest = sortedMovements[0];
-            const previousPossessor = latest?.movedTo || 'Registry';
-
-            if (previousPossessor.toLowerCase() !== 'registry') {
-                const att = attorneys.find(a => a.fullName.toLowerCase().trim() === previousPossessor.toLowerCase().trim());
-                if (att) {
-                    if (!pickupResults[att.id]) {
-                        pickupResults[att.id] = { fullName: att.fullName, phoneNumber: att.phoneNumber, files: [] };
-                    }
-                    pickupResults[att.id].files.push({ fileNumber: fileData.fileNumber, subject: fileData.subject });
-                }
-            }
-
-            // 2. Add New Movement (Return to Registry & Auto-Acknowledge)
-            const newMovement: Movement = {
-                id: `M-PICKUP-${Date.now()}-${Math.random().toString(36).substring(2,7)}`,
-                date: now,
-                movedTo: 'Registry',
-                status: 'Physically returned to Registry',
-                receivedAt: now,
-                receivedBy: receivedBy
-            };
-
-            batch.update(doc.ref, {
-                movements: FieldValue.arrayUnion(newMovement),
-                lastActivityAt: FieldValue.serverTimestamp(),
-                requests: [] // Clear all pending file requests
-            });
-        }
-    }
-    await batch.commit();
-    return { success: true, summary: Object.values(pickupResults) };
-};
-
-export const updateMovementInFile = async (fileNumber: string, movementId: string, data: any) => {
-    const snap = await getFileCollectionRef().where('fileNumber', '==', fileNumber).get();
-    if (snap.empty) throw new Error("File not found.");
-    const doc = snap.docs[0];
-    const movements = (doc.data()!.movements || []).map((m: any) => {
-        if (m.id === movementId) return { ...m, ...data, date: new Date(data.date) };
-        return m;
-    });
-    await doc.ref.update({ movements, lastActivityAt: FieldValue.serverTimestamp() });
-    return { success: true };
-};
-
-export const deleteMovementFromFile = async (fileNumber: string, movementId: string) => {
-    const snap = await getFileCollectionRef().where('fileNumber', '==', fileNumber).get();
-    if (snap.empty) throw new Error("File not found.");
-    const doc = snap.docs[0];
-    const movements = (doc.data()!.movements || []).filter((m: any) => m.id !== movementId);
-    await doc.ref.update({ movements, lastActivityAt: FieldValue.serverTimestamp() });
-    return { success: true };
-};
-
-export const confirmFileReceipt = async (fileNumber: string, movementId: string, receivedBy: string) => {
-    const snap = await getFileCollectionRef().where('fileNumber', '==', fileNumber).get();
-    if (snap.empty) throw new Error("File not found.");
-    const doc = snap.docs[0];
-    const movements = (doc.data()!.movements || []).map((m: any) => {
-        if (m.id === movementId) return { ...m, receivedAt: new Date(), receivedBy };
-        return m;
-    });
-    await doc.ref.update({ movements, lastActivityAt: FieldValue.serverTimestamp() });
-    return { success: true };
-};
-
-export const createArchiveRecord = async (data: any) => {
-    const docRef = await getArchiveCollectionRef().add(data);
-    return { id: docRef.id };
-};
-
-export const updateArchiveRecord = async (id: string, data: any) => {
-    await getArchiveCollectionRef().doc(id).update(data);
-};
-
-export const deleteArchiveRecord = async (id: string) => {
-    await getArchiveCollectionRef().doc(id).delete();
-    return { success: true };
-};
-
-export const createCensusRecord = async (data: any) => {
-    const docRef = await getCensusCollectionRef().add(data);
-    return { id: docRef.id };
-};
-
-export const updateCensusRecord = async (id: string, data: any) => {
-    await getCensusCollectionRef().doc(id).update(data);
-};
-
-export const deleteCensusRecord = async (id: string) => {
-    await getCensusCollectionRef().doc(id).delete();
-    return { success: true };
 };
