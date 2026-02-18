@@ -105,6 +105,7 @@ import {
 
 const categories = [
     { value: 'all', label: 'All Categories' },
+    { value: 'judgment-debt', label: 'Judgment Debt' },
     { value: 'civil cases (local)', label: 'Civil Cases (Local)' },
     { value: 'civil cases (int\'l)', label: 'Civil Cases (Int\'l)' },
     { value: 'civil cases (regions)', label: 'Civil Cases (Regions)' },
@@ -463,7 +464,11 @@ export default function PortalDashboard() {
             
             // Apply category filter for SG
             if (isSG && reportCategory !== 'all') {
-                reportFiles = reportFiles.filter(f => f.category?.toLowerCase() === reportCategory.toLowerCase());
+                if (reportCategory === 'judgment-debt') {
+                    reportFiles = reportFiles.filter(f => f.isJudgmentDebt === true);
+                } else {
+                    reportFiles = reportFiles.filter(f => f.category?.toLowerCase() === reportCategory.toLowerCase());
+                }
             }
 
             const activeCount = reportFiles.filter(f => f.status !== 'Completed').length;
