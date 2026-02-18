@@ -193,8 +193,19 @@ export function Dashboard({
     }
 
     const dateStr = format(toDate(reminder.date)!, 'PPp');
+    
+    // Shorten title if too long
+    const rawSubject = reminder.subject || '';
+    const truncatedSubject = rawSubject.length > 60 
+        ? rawSubject.substring(0, 57) + "..." 
+        : rawSubject;
+
+    const fileDisplay = reminder.fileNumber === 'General'
+        ? 'General Activity'
+        : `${reminder.fileNumber} (${truncatedSubject})`;
+
     const message = encodeURIComponent(
-        `Hello ${attorney.fullName},\n\nThis is an automated reminder from the File Tracker system regarding this file/activity below:\n\n• File: ${reminder.fileNumber}\n• Task: ${reminder.text}\n• Due Date: ${dateStr}\n\nPlease take the necessary action.\n\nThank you.`
+        `Hello ${attorney.fullName},\n\nThis is an automated reminder from the File Tracker system regarding this file/activity below:\n\n• File: ${fileDisplay}\n• Task: ${reminder.text}\n• Due Date: ${dateStr}\n\nPlease take the necessary action.\n\nThank you.`
     );
     
     window.open(`https://wa.me/${attorney.phoneNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
