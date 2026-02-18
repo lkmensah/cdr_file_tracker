@@ -49,7 +49,7 @@ const FormSchema = z.object({
   fileNumber: z.string().min(1, 'File number is required.'),
   suitNumber: z.string(),
   category: z.string().min(1, 'Category is required.'),
-  group: z.string().min(1, 'Group is required.'),
+  group: z.string().optional(),
   subject: z.string().min(1, 'Subject is required.'),
   dateCreated: z.date({ required_error: 'Date created is required.' }),
   assignedTo: z.string().optional(),
@@ -59,6 +59,15 @@ const FormSchema = z.object({
   isJudgmentDebt: z.boolean().optional(),
   amountGHC: z.string().optional(),
   amountUSD: z.string().optional(),
+}).refine(data => {
+    // Group is mandatory for everything EXCEPT Miscellaneous
+    if (data.category !== 'miscellaneous' && (!data.group || data.group.trim() === '')) {
+        return false;
+    }
+    return true;
+}, {
+    message: 'Group is required for this category.',
+    path: ['group'],
 });
 
 type FormData = z.infer<typeof FormSchema>;
@@ -190,6 +199,8 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
   const leadAssignee = form.watch('assignedTo');
   const coAssignees = form.watch('coAssignees');
   
+  const isMiscellaneous = selectedCategory === 'miscellaneous';
+
   const showJudgmentDebtToggle = 
     selectedCategory === 'civil cases (local)' || 
     selectedCategory === 'civil cases (int\'l)' || 
@@ -242,6 +253,9 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
             if (value === true) formData.append(key, 'on');
           } else if (key === 'coAssignees' && Array.isArray(value)) {
             formData.append(key, value.join(','));
+          } else if (isMiscellaneous && (key === 'group' || key === 'assignedTo' || key === 'coAssignees')) {
+            // Skip these for miscellaneous unless explicitly handled
+            return;
           } else {
             formData.append(key, value instanceof Date ? format(value, 'yyyy-MM-dd') : String(value));
           }
@@ -279,7 +293,7 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
         <DialogHeader>
           <DialogTitle>{isUpdateMode ? 'Edit File' : 'Create New File'}</DialogTitle>
           <DialogDescription>
-             Update metadata, group ownership, or collaborative team assignments.
+             {isMiscellaneous ? 'Miscellaneous files are treated as General/Shared and directed via movements.' : 'Update metadata, group ownership, or collaborative team assignments.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -346,6 +360,11 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
                                     value={field.value}
                                     onChange={(val) => {
                                         field.onChange(val);
+                                        if (val === 'miscellaneous') {
+                                            form.setValue('group', '');
+                                            form.setValue('assignedTo', '');
+                                            form.setValue('coAssignees', []);
+                                        }
                                         if (val !== 'civil cases (local)' && val !== 'civil cases (int\'l)' && val !== 'civil cases (regions)') {
                                             form.setValue('isJudgmentDebt', false);
                                             form.setValue('amountGHC', '');
@@ -479,97 +498,106 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
                 </div>
             </div>
 
-            <Separator />
-
-            <div className="space-y-4">
-                <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                    <Users className="h-3 w-3" /> Team Assignment & Oversight
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                        control={form.control}
-                        name="group"
-                        render={({ field }) => (
-                            <FormItem className="flex flex-col">
-                                <MandatoryLabel>Assigned Group</MandatoryLabel>
-                                <Combobox
-                                    options={groupOptions}
-                                    value={field.value}
-                                    onChange={field.onChange}
-                                    placeholder="Select group..."
-                                    searchPlaceholder="Search groups..."
-                                />
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="assignedTo"
-                        render={({ field }) => (
-                            <FormItem className="flex flex-col">
-                                <FormLabel>Lead Practitioner</FormLabel>
-                                <Combobox
-                                    options={attorneyOptions}
-                                    value={field.value}
-                                    onChange={field.onChange}
-                                    placeholder="Select lead..."
-                                />
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                </div>
-
-                <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Collaborative Team (Co-Assignees)</Label>
-                    <div className="rounded-md border p-4 bg-muted/10 space-y-4">
-                        <div className="flex flex-wrap gap-2 mb-2 min-h-8">
-                            {coAssignees.length > 0 ? coAssignees.map(name => (
-                                <Badge key={name} variant="secondary" className="gap-1 px-2 py-1 bg-primary/10 text-primary border-primary/20">
-                                    {name}
-                                    <button type="button" onClick={() => handleToggleCoAssignee(name)} className="hover:text-destructive">×</button>
-                                </Badge>
-                            )) : (
-                                <span className="text-[10px] text-muted-foreground italic uppercase">No co-assignees selected</span>
-                            )}
-                        </div>
-                        <div className="relative">
-                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                            <Input 
-                                placeholder="Search attorneys to add..." 
-                                className="h-8 pl-8 text-xs bg-background" 
-                                value={coAssigneeSearch}
-                                onChange={(e) => setCoAssigneeSearch(e.target.value)}
+            {!isMiscellaneous ? (
+                <>
+                    <Separator />
+                    <div className="space-y-4">
+                        <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                            <Users className="h-3 w-3" /> Team Assignment & Oversight
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FormField
+                                control={form.control}
+                                name="group"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-col">
+                                        <MandatoryLabel>Assigned Group</MandatoryLabel>
+                                        <Combobox
+                                            options={groupOptions}
+                                            value={field.value}
+                                            onChange={field.onChange}
+                                            placeholder="Select group..."
+                                            searchPlaceholder="Search groups..."
+                                        />
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="assignedTo"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-col">
+                                        <FormLabel>Lead Practitioner</FormLabel>
+                                        <Combobox
+                                            options={attorneyOptions}
+                                            value={field.value}
+                                            onChange={field.onChange}
+                                            placeholder="Select lead..."
+                                        />
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
                             />
                         </div>
-                        <ScrollArea className="h-48 rounded border bg-background">
-                            <div className="p-2 space-y-1">
-                                {(attorneys || [])
-                                    .filter(a => a.fullName !== leadAssignee)
-                                    .filter(a => {
-                                        if (!coAssigneeSearch) return true;
-                                        const term = coAssigneeSearch.toLowerCase();
-                                        return a.fullName.toLowerCase().includes(term) || (a.rank && a.rank.toLowerCase().includes(term));
-                                    })
-                                    .map(a => (
-                                    <div key={a.id} className="flex items-center space-x-3 p-2 hover:bg-muted/50 rounded-md transition-colors">
-                                        <Checkbox 
-                                            id={`co-${a.id}`} 
-                                            checked={coAssignees.includes(a.fullName)}
-                                            onCheckedChange={() => handleToggleCoAssignee(a.fullName)}
-                                        />
-                                        <label htmlFor={`co-${a.id}`} className="text-sm font-medium leading-none cursor-pointer flex-1">
-                                            {a.fullName}
-                                            <span className="text-[10px] text-muted-foreground ml-2 uppercase font-bold">{a.rank}</span>
-                                        </label>
+
+                        <div className="space-y-2">
+                            <Label className="text-xs font-bold uppercase text-muted-foreground">Collaborative Team (Co-Assignees)</Label>
+                            <div className="rounded-md border p-4 bg-muted/10 space-y-4">
+                                <div className="flex flex-wrap gap-2 mb-2 min-h-8">
+                                    {coAssignees.length > 0 ? coAssignees.map(name => (
+                                        <Badge key={name} variant="secondary" className="gap-1 px-2 py-1 bg-primary/10 text-primary border-primary/20">
+                                            {name}
+                                            <button type="button" onClick={() => handleToggleCoAssignee(name)} className="hover:text-destructive">×</button>
+                                        </Badge>
+                                    )) : (
+                                        <span className="text-[10px] text-muted-foreground italic uppercase">No co-assignees selected</span>
+                                    )}
+                                </div>
+                                <div className="relative">
+                                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                    <Input 
+                                        placeholder="Search attorneys to add..." 
+                                        className="h-8 pl-8 text-xs bg-background" 
+                                        value={coAssigneeSearch}
+                                        onChange={(e) => setCoAssigneeSearch(e.target.value)}
+                                    />
+                                </div>
+                                <ScrollArea className="h-48 rounded border bg-background">
+                                    <div className="p-2 space-y-1">
+                                        {(attorneys || [])
+                                            .filter(a => a.fullName !== leadAssignee)
+                                            .filter(a => {
+                                                if (!coAssigneeSearch) return true;
+                                                const term = coAssigneeSearch.toLowerCase();
+                                                return a.fullName.toLowerCase().includes(term) || (a.rank && a.rank.toLowerCase().includes(term));
+                                            })
+                                            .map(a => (
+                                            <div key={a.id} className="flex items-center space-x-3 p-2 hover:bg-muted/50 rounded-md transition-colors">
+                                                <Checkbox 
+                                                    id={`co-${a.id}`} 
+                                                    checked={coAssignees.includes(a.fullName)}
+                                                    onCheckedChange={() => handleToggleCoAssignee(a.fullName)}
+                                                />
+                                                <label htmlFor={`co-${a.id}`} className="text-sm font-medium leading-none cursor-pointer flex-1">
+                                                    {a.fullName}
+                                                    <span className="text-[10px] text-muted-foreground ml-2 uppercase font-bold">{a.rank}</span>
+                                                </label>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
+                                </ScrollArea>
                             </div>
-                        </ScrollArea>
+                        </div>
                     </div>
+                </>
+            ) : (
+                <div className="p-4 bg-muted/30 rounded-lg border border-dashed text-center space-y-2">
+                    <Info className="h-5 w-5 text-muted-foreground mx-auto" />
+                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">General File Mode Active</p>
+                    <p className="text-[10px] text-muted-foreground">This file will be directed through physical movement logs rather than formal assignments.</p>
                 </div>
-            </div>
+            )}
 
             {isUpdateMode && (
                  <FormField

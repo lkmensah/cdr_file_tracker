@@ -274,7 +274,7 @@ export default function PortalDashboard() {
         if (!isSG || !allFiles) return { chartData: [], workload: {} };
         const groupWorkload: Record<string, { active: number; completed: number }> = {};
         allFiles.forEach(file => {
-            const groupName = file.group || 'Unassigned';
+            const groupName = file.group || 'General / Shared';
             if (!groupWorkload[groupName]) groupWorkload[groupName] = { active: 0, completed: 0 };
             if (file.status === 'Completed') groupWorkload[groupName].completed++;
             else groupWorkload[groupName].active++;
@@ -487,7 +487,7 @@ export default function PortalDashboard() {
             // Group files by Department (Group)
             const groupedFiles: Record<string, CorrespondenceFile[]> = {};
             reportFiles.forEach(file => {
-                const groupName = file.group || 'Unassigned / Other';
+                const groupName = file.group || 'General / Shared';
                 if (!groupedFiles[groupName]) groupedFiles[groupName] = [];
                 groupedFiles[groupName].push(file);
             });
@@ -607,12 +607,12 @@ export default function PortalDashboard() {
                             <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase font-bold tracking-tighter overflow-hidden">
                                 <span className={cn("shrink-0", isCompleted ? "text-green-600" : "text-primary")}>{file.category}</span>
                                 <span className="shrink-0">•</span>
-                                <span className="shrink-0">Group: {file.group || 'Unassigned'}</span>
+                                <span className="shrink-0">Group: {file.group || 'General'}</span>
                                 <span className="shrink-0">•</span>
-                                {isLead ? (
+                                {isLead || (!file.assignedTo && isWithMe) ? (
                                     <span className="truncate max-w-[150px]">Location: {isWithMe ? 'At My Desk' : (latestMovement?.movedTo || 'Registry')}</span>
                                 ) : (
-                                    <span className="truncate max-w-[150px]">Lead: {file.assignedTo || 'Unassigned'}</span>
+                                    <span className="truncate max-w-[150px]">Lead: {file.assignedTo || 'General / Shared'}</span>
                                 )}
                             </div>
                         </div>
