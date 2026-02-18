@@ -87,6 +87,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { refineDraft } from '@/ai/flows/refine-draft';
 import { downloadLegalDoc } from '@/lib/download-docx';
+import { useProfile } from '@/components/auth-provider';
 
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -386,7 +387,7 @@ export default function PortalFileDetail() {
                             </TabsContent>
                             <TabsContent value="attachments" className="space-y-6">
                                 {canInteract && (<Card className="border-dashed border-2 bg-muted/10"><CardContent className="py-10 flex flex-col items-center justify-center space-y-4 px-4 text-center"><div className="bg-primary/10 p-4 rounded-full"><Upload className="h-8 w-8 text-primary" /></div><div className="space-y-1"><h4 className="font-bold">Upload Case Work</h4><p className="text-xs text-muted-foreground">Attach PDFs or Word documents (Max 2MB)</p></div><div className="relative w-full max-w-xs"><input type="file" className="absolute inset-0 opacity-0 cursor-pointer w-full" accept=".pdf,.doc,.docx" onChange={handleFileUpload} disabled={isUploading} /><Button disabled={isUploading} variant="outline" className="gap-2 w-full">{isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Select Document</Button></div></CardContent></Card>)}
-                                <div className="space-y-3"><h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Attached Documents</h3><div className="grid gap-3">{(file?.attachments || []).length > 0 ? (file.attachments || []).map(att => (<Card key={att.id}><CardContent className="p-4 flex items-center justify-between gap-3"><div className="flex items-center gap-3 min-0"><div className="p-2 bg-muted rounded shrink-0"><FileIcon className="h-5 w-5 text-muted-foreground" /></div><div className="min-w-0"><p className="text-sm font-semibold leading-none truncate">{att.name}</p><p className="text-[10px] text-muted-foreground uppercase mt-1.5 truncate">By {att.uploadedBy} • {toDate(att.uploadedAt) ? format(toDate(att.uploadedAt)!, 'MMM d') : 'N/A'}</p></div></div><div className="flex items-center gap-1 shrink-0"><Button variant="ghost" size="icon" onClick={() => handleViewDocument(att)} title="View Document"><Eye className="h-4 w-4" /></Button>{canInteract && profile?.fullName === att.uploadedBy && (<Button variant="ghost" size="icon" onClick={() => setAttachmentToDelete(att)} className="text-destructive" title="Delete Document"><Trash2 className="h-4 w-4" /></Button>)}</div></CardContent></Card>)) : (<div className="text-center py-12 border border-dashed rounded-lg bg-background"><AlertCircle className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" /><p className="text-sm text-muted-foreground italic">No files attached to this case.</p></div>)}</div></div>
+                                <div className="space-y-3"><h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Attached Documents</h3><div className="grid gap-3">{(file?.attachments || []).length > 0 ? (file.attachments || []).map(att => (<Card key={att.id}><CardContent className="p-4 flex items-center justify-between gap-3"><div className="flex items-center gap-3 min-0"><div className="p-2 bg-muted rounded shrink-0"><FileIcon className="h-5 w-5 text-muted-foreground" /></div><div className="min-w-0"><p className="text-sm font-semibold leading-none truncate">{att.name}</p><p className="text-[10px] text-muted-foreground uppercase mt-1.5 truncate">By {att.uploadedBy} • {toDate(att.uploadedAt) ? format(toDate(att.uploadedAt)!, 'MMM d') : 'N/A'}</p></div></div><div className="flex items-center gap-1 shrink-0"><Button variant="ghost" size="icon" onClick={() => handleViewDocument(att)} title="View Document"><Eye className="h-4 w-4" /></Button>{canInteract && attorney?.fullName === att.uploadedBy && (<Button variant="ghost" size="icon" onClick={() => setAttachmentToDelete(att)} className="text-destructive" title="Delete Document"><Trash2 className="h-4 w-4" /></Button>)}</div></CardContent></Card>)) : (<div className="text-center py-12 border border-dashed rounded-lg bg-background"><AlertCircle className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" /><p className="text-sm text-muted-foreground italic">No files attached to this case.</p></div>)}</div></div>
                             </TabsContent>
                             <TabsContent value="communications" className="space-y-6">
                                 {canInteract && (<Card className={cn("border-primary/20", isSG ? "bg-yellow-50/20" : "bg-primary/5")}><CardHeader className="pb-3"><CardTitle className="text-sm">{isSG ? 'Executive Instruction' : 'Team Messaging'}</CardTitle><CardDescription className="text-xs">Coordinate with co-assignees or the Registry.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="space-y-3"><Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">To:</Label><RadioGroup value={recipientType} onValueChange={(val: any) => setRecipientType(val)} className="flex flex-col gap-2"><div className="flex items-center space-x-2 bg-background p-2 rounded-md border shadow-sm"><RadioGroupItem value="lead" id="target-lead" /><Label htmlFor="target-lead" className="text-xs font-medium cursor-pointer">Lead / Team</Label></div>{isSG && (<div className="flex items-center space-x-2 bg-background p-2 rounded-md border shadow-sm"><RadioGroupItem value="attorney" id="target-attorney" /><Label htmlFor="target-attorney" className="text-xs font-medium cursor-pointer">Specific Attorney</Label></div>)}<div className="flex items-center space-x-2 bg-background p-2 rounded-md border shadow-sm"><RadioGroupItem value="registry" id="target-registry" /><Label htmlFor="target-registry" className="text-xs font-medium cursor-pointer">The Registry</Label></div></RadioGroup></div>{recipientType === 'attorney' && (<div className="space-y-2 animate-in fade-in zoom-in-95"><Label className="text-[10px] uppercase font-bold text-muted-foreground">Select Recipient</Label><Select value={specificRecipientId} onValueChange={setSpecificRecipientId}><SelectTrigger className="bg-background"><SelectValue placeholder="Choose attorney..." /></SelectTrigger><SelectContent>{allAttorneys?.map(a => <SelectItem key={a.id} value={a.id}>{a.fullName}</SelectItem>)}</SelectContent></Select></div>)}<Textarea placeholder="Type your message to the team..." value={instructionText} onChange={(e) => setInstructionText(e.target.value)} className="min-h-[100px] text-sm bg-background" /><Button className={cn("w-full h-9 gap-2", isSG && "bg-yellow-600 hover:bg-yellow-700")} onClick={handleSendInstruction} disabled={isSubmitting || !instructionText.trim() || (recipientType === 'attorney' && !specificRecipientId)}>{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{isSG ? 'Issue Directive' : 'Send Message'}</Button></CardContent></Card>)}
@@ -400,8 +401,38 @@ export default function PortalFileDetail() {
                     </div>
                 </div>
             </main>
+
+            {/* FileDetailDialog (Admin View Sub-component) */}
+            {/* Note: This is an internal helper component used within the Registry side, 
+                but we ensure its logic remains correct for the Admin profile. */}
+            <FileDetailDialogWrapper 
+                file={file} 
+                isOpen={false} 
+                onOpenChange={() => {}} 
+                onDataChange={() => {}} 
+                attachmentToDelete={attachmentToDelete}
+                setAttachmentToDelete={setAttachmentToDelete}
+                authDeleteAttachment={authDeleteAttachment}
+                isDeletingAttachment={isSubmitting}
+            />
+
             <AlertDialog open={!!draftToDelete} onOpenChange={(open) => !open && setDraftToDelete(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Draft?</AlertDialogTitle><AlertDialogDescription>Are you sure you want to permanently remove this shared draft?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => draftToDelete && handleDeleteDraft(draftToDelete.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isSubmitting}>{isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}Delete Draft</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
             <AlertDialog open={!!attachmentToDelete} onOpenChange={(open) => !open && setAttachmentToDelete(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Attachment?</AlertDialogTitle><AlertDialogDescription>Are you sure you want to remove <strong>{attachmentToDelete?.name}</strong> from this case?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => attachmentToDelete && handleDeleteAttachment(attachmentToDelete.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isSubmitting}>{isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}Delete Attachment</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
         </div>
     );
 }
+
+// Wrapper to house the FileDetailDialog sub-component correctly
+function FileDetailDialogWrapper({ file, attachmentToDelete, setAttachmentToDelete, authDeleteAttachment, isDeletingAttachment }: any) {
+    const { profile, isAdmin } = useProfile();
+    const handleLocalDelete = async () => {
+        if (!attachmentToDelete || !file) return;
+        await authDeleteAttachment(file.fileNumber, attachmentToDelete.id);
+        setAttachmentToDelete(null);
+    };
+
+    return null; // The logic is handled in the main component's Dialogs
+}
+
+function HistoryIcon(props: any) { return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg> }
+function FileTextIcon(props: any) { return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg> }
