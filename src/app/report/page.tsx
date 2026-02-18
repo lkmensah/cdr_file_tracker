@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -461,7 +460,7 @@ export default function ReportPage() {
                     <Label>Report Period</Label>
                     <RadioGroup
                         value={reportType}
-                        onOpenChange={(value) => setReportType(value as any)}
+                        onValueChange={(value) => setReportType(value as any)}
                         className="flex flex-col sm:flex-row flex-wrap gap-4"
                     >
                         <div className="flex items-center space-x-2">
