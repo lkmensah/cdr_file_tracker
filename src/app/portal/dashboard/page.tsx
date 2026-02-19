@@ -47,7 +47,8 @@ import {
     History,
     Users,
     FileDown,
-    Filter
+    Filter,
+    User
 } from 'lucide-react';
 import Link from 'next/link';
 import { 
@@ -202,7 +203,6 @@ export default function PortalDashboard() {
         const myGroup = attorney.group?.toLowerCase().trim();
 
         allFiles.forEach(file => {
-            // Enhanced Search: File metadata + Team Member Names
             const isMatch = !searchTerm.trim() || 
                 file.fileNumber.toLowerCase().includes(term) ||
                 file.subject.toLowerCase().includes(term) ||
@@ -215,7 +215,6 @@ export default function PortalDashboard() {
             if (isSG) {
                 all.push(file);
                 if (file.status === 'Completed') completed.push(file);
-                // Return early for all results in SG master view
             }
 
             const isLead = file.assignedTo?.toLowerCase().trim() === myName;
@@ -466,7 +465,6 @@ export default function PortalDashboard() {
 
             let reportFiles = isSG ? caseloads.all : caseloads.primary;
             
-            // Apply category filter for SG
             if (isSG && reportCategory !== 'all') {
                 if (reportCategory === 'judgment-debt') {
                     reportFiles = reportFiles.filter(f => f.isJudgmentDebt === true);
@@ -488,7 +486,6 @@ export default function PortalDashboard() {
                 headStyles: { fillColor: [84, 101, 55] },
             });
 
-            // Group files by Department (Group)
             const groupedFiles: Record<string, CorrespondenceFile[]> = {};
             reportFiles.forEach(file => {
                 const groupName = file.group || 'General / Shared';
@@ -499,7 +496,6 @@ export default function PortalDashboard() {
             let finalY = (doc as any).lastAutoTable.finalY + 15;
 
             Object.entries(groupedFiles).sort().forEach(([groupName, files]) => {
-                // Add Group Header
                 if (finalY > 250) { doc.addPage(); finalY = 20; }
                 doc.setFontSize(11);
                 doc.setTextColor(84, 101, 55);
@@ -650,11 +646,13 @@ export default function PortalDashboard() {
                             <h2 className="text-sm font-bold leading-none">{attorney?.fullName}</h2>
                             {isSG ? (
                                 <Badge className="bg-yellow-500 text-white border-yellow-600 text-[8px] h-4 uppercase font-bold px-1.5 py-0">Solicitor General</Badge>
-                            ) : attorney.isGroupHead && (
+                            ) : attorney.isGroupHead ? (
                                 <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-[8px] h-4 uppercase font-bold px-1.5 py-0"><ShieldCheck className="h-3 w-3 mr-1" /> Group Head</Badge>
+                            ) : (
+                                <Badge variant="secondary" className="bg-muted text-muted-foreground text-[8px] h-4 uppercase font-bold px-1.5 py-0">Practitioner</Badge>
                             )}
                         </div>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">{attorney?.rank || 'Practitioner'}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">{attorney?.group || 'General Division'}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -675,7 +673,7 @@ export default function PortalDashboard() {
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div>
                                 <h2 className="text-2xl font-bold tracking-tight">{isSG ? 'Executive Oversight Hub' : 'Group Oversight Hub'}</h2>
-                                <p className="text-sm text-muted-foreground">Strategic monitoring for <strong>{isSG ? 'All groups' : attorney.group}</strong></p>
+                                <p className="text-sm text-muted-foreground">Strategic monitoring for <strong>{isSG ? 'All groups' : attorney.group || 'Shared / General Files'}</strong></p>
                             </div>
                             <div className="flex items-center gap-2">
                                 {isSG && (
@@ -871,7 +869,7 @@ export default function PortalDashboard() {
                                     {caseloads.primary.length > 0 && <section className="space-y-4"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><h3 className="text-xs font-bold flex items-center gap-2 text-muted-foreground uppercase tracking-widest"><Briefcase className="h-4 w-4" /> My Primary Caseload</h3><Button variant="outline" size="sm" className="h-8 gap-2 border-primary/20 text-primary hover:bg-primary/5" onClick={handleGenerateStatusReport} disabled={isReporting}>{isReporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}Download My Status Report</Button></div><div className="grid gap-4 grid-cols-1">{caseloads.primary.map(file => <FileCard key={file.id} file={file} type="primary" />)}</div></section>}
                                     {caseloads.collaborative.length > 0 && <section className="space-y-4"><h3 className="text-xs font-bold flex items-center gap-2 text-teal-600 uppercase tracking-widest"><Users className="h-4 w-4" /> Collaborative Team Cases</h3><div className="grid gap-4 grid-cols-1">{caseloads.collaborative.map(file => <FileCard key={file.id} file={file} type="collaborative" />)}</div></section>}
                                     {caseloads.action.length > 0 && <section className="space-y-4"><h3 className="text-xs font-bold flex items-center gap-2 text-muted-foreground uppercase tracking-widest"><UserCheck className="h-4 w-4" /> Files on My Desk</h3><div className="grid gap-4 grid-cols-1">{caseloads.action.map(file => <FileCard key={file.id} file={file} type="action" />)}</div></section>}
-                                    {caseloads.oversight.length > 0 && <section className="space-y-4"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2"><h3 className="text-xs font-bold flex items-center gap-2 text-purple-600 uppercase tracking-widest"><Users className="h-4 w-4" /> Group Oversight ({attorney.group})</h3><Badge variant="secondary" className="bg-purple-100 text-purple-700 text-[9px] uppercase font-bold w-fit">Group Head View</Badge></div><div className="grid gap-4 grid-cols-1">{caseloads.oversight.map(file => <FileCard key={file.id} file={file} type="oversight" />)}</div></section>}
+                                    {caseloads.oversight.length > 0 && <section className="space-y-4"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2"><h3 className="text-xs font-bold flex items-center gap-2 text-purple-600 uppercase tracking-widest"><Users className="h-4 w-4" /> Group Oversight ({attorney.group || 'General'})</h3><Badge variant="secondary" className="bg-purple-100 text-purple-700 text-[9px] uppercase font-bold w-fit">Group Head View</Badge></div><div className="grid gap-4 grid-cols-1">{caseloads.oversight.map(file => <FileCard key={file.id} file={file} type="oversight" />)}</div></section>}
                                     {caseloads.historical.length > 0 && <section className="space-y-4 pt-4"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2"><h3 className="text-xs font-bold flex items-center gap-2 text-muted-foreground uppercase tracking-widest"><History className="h-4 w-4" /> My Previous Assignments (Historical)</h3><Badge variant="secondary" className="bg-muted text-muted-foreground text-[9px] uppercase font-bold w-fit border-none">Read-Only Access</Badge></div><div className="grid gap-4 grid-cols-1">{caseloads.historical.map(file => <FileCard key={file.id} file={file} type="historical" />)}</div></section>}
                                 </div>
                             )}

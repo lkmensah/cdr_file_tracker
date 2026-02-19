@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -12,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Users, Phone, Mail, MoreHorizontal, Pencil, MessageCircle, ShieldCheck, Crown } from 'lucide-react';
+import { Users, Phone, Mail, MoreHorizontal, Pencil, MessageCircle, ShieldCheck, Crown, User } from 'lucide-react';
 import { Button } from './ui/button';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from './ui/dropdown-menu';
 
@@ -81,14 +80,17 @@ export function AttorneysTable({ attorneys, onEdit }: { attorneys: Attorney[], o
                 {attorney.rank ? (
                     <Badge variant="outline" className="font-normal">{attorney.rank}</Badge>
                 ) : (
-                    <span className="text-muted-foreground text-xs italic">Not Set</span>
+                    <Badge variant="secondary" className="font-bold text-[10px] uppercase bg-muted text-muted-foreground">Practitioner</Badge>
                 )}
               </TableCell>
               <TableCell>
                 {attorney.group ? (
-                    <span className="text-sm">{attorney.group}</span>
+                    <span className="text-sm font-medium">{attorney.group}</span>
                 ) : (
-                    <span className="text-muted-foreground text-xs italic">Not Set</span>
+                    <div className="flex items-center gap-1.5 text-muted-foreground italic text-xs">
+                        <User className="h-3 w-3" />
+                        <span>General / No Group</span>
+                    </div>
                 )}
               </TableCell>
               <TableCell>
