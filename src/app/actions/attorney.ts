@@ -6,6 +6,7 @@ import * as db from '@/lib/data';
 import { logUserActivity } from '@/lib/audit';
 import { initializeAdmin } from '@/firebase/admin';
 import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
 
 async function verifyUser(clientToken: string) {
     const adminAuth = getAuth(initializeAdmin());
@@ -40,6 +41,22 @@ export async function createAttorney(clientToken: string, formData: FormData) {
     if (!validated.success) return { message: validated.error.errors[0].message };
 
     try {
+        const name = validated.data.fullName.trim();
+        const phone = validated.data.phoneNumber.trim();
+        const group = validated.data.group?.trim() || 'no group yet';
+
+        // Data Integrity: Check for existing attorney with same Name, Contact, and Group
+        const firestore = getFirestore(initializeAdmin());
+        const dupeCheck = await firestore.collection('attorneys')
+            .where('fullName', '==', name)
+            .where('phoneNumber', '==', phone)
+            .where('group', '==', group)
+            .get();
+
+        if (!dupeCheck.empty) {
+            return { message: 'Registration Error: An attorney with this name and phone number is already registered in this group.' };
+        }
+
         await db.createAttorney(validated.data);
         const roles = [];
         if (validated.data.isSG) roles.push('Solicitor General');
@@ -72,6 +89,23 @@ export async function updateAttorney(clientToken: string, formData: FormData) {
         const currentAttorney = await db.getAttorneyById(id);
         if (!currentAttorney) return { message: 'Attorney not found.' };
 
+        // Data Integrity: Ensure update doesn't create a duplicate
+        const name = validated.data.fullName.trim();
+        const phone = validated.data.phoneNumber.trim();
+        const group = validated.data.group?.trim() || 'no group yet';
+
+        const firestore = getFirestore(initializeAdmin());
+        const dupeCheck = await firestore.collection('attorneys')
+            .where('fullName', '==', name)
+            .where('phoneNumber', '==', phone)
+            .where('group', '==', group)
+            .get();
+
+        const duplicate = dupeCheck.docs.find(doc => doc.id !== id);
+        if (duplicate) {
+            return { message: 'Update Error: Another practitioner with these details is already registered.' };
+        }
+
         // Normalize names and groups for comparison
         const oldName = currentAttorney.fullName.trim();
         const newName = validated.data.fullName.trim();
@@ -91,7 +125,6 @@ export async function updateAttorney(clientToken: string, formData: FormData) {
         }
 
         // 2. Handle Group Migration System-wide (Retroactive)
-        // If name changed, we search using the NEW name since propagation just finished.
         if (groupChanged || nameChanged) {
             const targetGroup = validated.data.group || 'no group yet';
             await db.propagateAttorneyGroupChange(newName, targetGroup);
