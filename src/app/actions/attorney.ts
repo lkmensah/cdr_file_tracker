@@ -84,10 +84,11 @@ export async function updateAttorney(clientToken: string, formData: FormData) {
             await logUserActivity(userName, 'UPDATE_ATTORNEY_NAME', `Renamed attorney from ${currentAttorney.fullName} to ${validated.data.fullName}. System-wide records updated.`);
         }
 
-        // 2. Handle Group Migration (New Group or joining a group for first time)
-        if (groupChanged && validated.data.group) {
-            await db.propagateAttorneyGroupChange(validated.data.fullName, validated.data.group);
-            await logUserActivity(userName, 'ATTORNEY_GROUP_MIGRATION', `Migrated ${validated.data.fullName} to ${validated.data.group}. Active lead files updated for oversight.`);
+        // 2. Handle Group Migration
+        if (groupChanged) {
+            const targetGroup = validated.data.group || 'no group yet';
+            await db.propagateAttorneyGroupChange(validated.data.fullName, targetGroup);
+            await logUserActivity(userName, 'ATTORNEY_GROUP_MIGRATION', `Migrated ${validated.data.fullName} to ${targetGroup}. Records updated for oversight.`);
         } else if (!nameChanged && !groupChanged) {
             await logUserActivity(userName, 'UPDATE_ATTORNEY', `Updated attorney details: ${validated.data.fullName}`);
         }

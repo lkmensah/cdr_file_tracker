@@ -339,7 +339,15 @@ export const moveFile = async (data: any): Promise<{ file?: CorrespondenceFile, 
     if (fileSnapshot.empty) return { error: `File number ${data.fileNumber} not found.` };
     
     const fileDoc = fileSnapshot.docs[0];
-    const file = docToType<CorrespondenceFile>(fileDoc);
+    const fileData = fileDoc.data()!;
+    
+    // Resolve group of the recipient
+    let resolvedGroup = fileData.group || 'no group yet';
+    const attorneySnap = await getAttorneyCollectionRef().where('fullName', '==', data.movedTo).limit(1).get();
+    if (!attorneySnap.empty) {
+        resolvedGroup = attorneySnap.docs[0].data().group || 'no group yet';
+    }
+
     const newMovement: Movement = {
         id: `M-${Date.now()}`,
         date: new Date(data.date),
@@ -347,11 +355,12 @@ export const moveFile = async (data: any): Promise<{ file?: CorrespondenceFile, 
         status: data.status,
     };
     
-    const updatedRequests = (file.requests || []).filter(r => r.requesterName.toLowerCase().trim() !== data.movedTo.toLowerCase().trim());
+    const updatedRequests = (fileData.requests || []).filter((r: any) => r.requesterName.toLowerCase().trim() !== data.movedTo.toLowerCase().trim());
 
     await fileDoc.ref.update({ 
         movements: FieldValue.arrayUnion(newMovement),
         requests: updatedRequests,
+        group: resolvedGroup,
         lastActivityAt: FieldValue.serverTimestamp()
     });
     const updatedDoc = await fileDoc.ref.get();
@@ -359,7 +368,16 @@ export const moveFile = async (data: any): Promise<{ file?: CorrespondenceFile, 
 }
 
 export const batchMoveFiles = async (data: any) => {
-    const batch = getFirestore(initializeAdmin()).batch();
+    const firestore = getFirestore(initializeAdmin());
+    const batch = firestore.batch();
+    
+    // Resolve group of the recipient once
+    let resolvedGroup = 'no group yet';
+    const attorneySnap = await getAttorneyCollectionRef().where('fullName', '==', data.movedTo).limit(1).get();
+    if (!attorneySnap.empty) {
+        resolvedGroup = attorneySnap.docs[0].data().group || 'no group yet';
+    }
+
     const newMovement: Movement = {
         id: `M-${Date.now()}`,
         date: new Date(data.date),
@@ -376,10 +394,10 @@ export const batchMoveFiles = async (data: any) => {
             const updatePayload: any = {
                 movements: FieldValue.arrayUnion(newMovement),
                 requests: updatedRequests,
+                group: data.group || resolvedGroup, // Prefer manual assignment if provided in batch dialog
                 lastActivityAt: FieldValue.serverTimestamp()
             };
 
-            if (data.group) updatePayload.group = data.group;
             if (data.assignedTo) updatePayload.assignedTo = data.assignedTo;
 
             batch.update(doc.ref, updatePayload);
@@ -713,16 +731,42 @@ export const propagateAttorneyGroupChange = async (attorneyName: string, newGrou
     const firestore = getFirestore(initializeAdmin());
     const batch = firestore.batch();
     
+    // Use a normalized iteration to handle potential case/whitespace mismatches safely
     const filesSnapshot = await getFileCollectionRef()
-        .where('assignedTo', '==', attorneyName)
         .where('status', '==', 'Active')
         .get();
 
+    const normalizedName = attorneyName.toLowerCase().trim();
+
     filesSnapshot.docs.forEach(doc => {
-        batch.update(doc.ref, { 
-            group: newGroup,
-            lastActivityAt: FieldValue.serverTimestamp() 
-        });
+        const data = doc.data();
+        let shouldUpdate = false;
+
+        // 1. Is this attorney the Lead?
+        if (data.assignedTo?.toLowerCase().trim() === normalizedName) {
+            shouldUpdate = true;
+        }
+
+        // 2. Is this a Miscellaneous file currently in this attorney's possession?
+        if (data.category?.toLowerCase() === 'miscellaneous') {
+            const movements = data.movements || [];
+            const latest = [...movements].sort((a,b) => {
+                const dA = a.date instanceof Timestamp ? a.date.toDate() : new Date(a.date);
+                const dB = b.date instanceof Timestamp ? b.date.toDate() : new Date(b.date);
+                return dB.getTime() - dA.getTime();
+            })[0];
+
+            if (latest?.movedTo?.toLowerCase().trim() === normalizedName) {
+                shouldUpdate = true;
+            }
+        }
+
+        if (shouldUpdate && data.group !== newGroup) {
+            batch.update(doc.ref, { 
+                group: newGroup,
+                lastActivityAt: FieldValue.serverTimestamp() 
+            });
+        }
     });
 
     await batch.commit();
