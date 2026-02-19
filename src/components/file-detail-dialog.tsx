@@ -168,11 +168,11 @@ const MovementEditForm = ({ movement, fileNumber, attorneys, onCancel, onSuccess
     const { toast } = useToast();
     const { exec: authUpdate, isLoading: isUpdating } = useAuthAction(updateMovementInFile, {
         onSuccess: (res) => {
-            if (res.success) {
+            if (res && res.message?.includes('Success')) {
                 toast({ title: 'Movement updated' });
                 onSuccess();
             } else {
-                toast({ variant: 'destructive', title: 'Error', description: res.error });
+                toast({ variant: 'destructive', title: 'Error', description: res?.message || 'Update failed' });
             }
         }
     });
@@ -275,7 +275,7 @@ const MovementDetails = ({ movement, index, total, fileNumber, fileSubject, isLa
     const { data: attorneys } = useCollection<Attorney>(attorneysQuery);
     
     const { exec: authConfirm, isLoading: isConfirming } = useAuthAction(confirmFileReceipt, { onSuccess: (r) => { if (r && r.message?.includes('Success')) { toast({ title: 'Receipt Confirmed' }); onDataChange(); const dest = movement.movedTo; const target = attorneys?.find(a => a.fullName.toLowerCase() === dest.toLowerCase()); if (target?.phoneNumber) { const truncatedSubject = truncate(fileSubject, 60); const msg = encodeURIComponent(`Hello ${target.fullName},\n\nThe following file(s) have been delivered to your desk and confirmed received in the CDR_File Tracker system:\n\n• *${fileNumber}* - ${truncatedSubject}\n\nPlease verify physical receipt.\n\nThank you.`); window.open(`https://wa.me/${target.phoneNumber.replace(/\D/g, '')}?text=${msg}`, '_blank'); } } } });
-    const { exec: authDelete, isLoading: isDeleting } = useAuthAction(deleteMovementFromFile, { onSuccess: () => { toast({ title: 'Movement record deleted' }); onDataChange(); setIsDeleteAlertOpen(false); } });
+    const { exec: authDelete, isLoading: isDeleting } = useAuthAction(deleteMovementFromFile, { onSuccess: (res) => { if (res && (res.success || res.message?.includes('Success'))) { toast({ title: 'Movement record deleted' }); onDataChange(); setIsDeleteAlertOpen(false); } } });
     
     const handleConfirm = async () => { const fd = new FormData(); fd.append('fileNumber', fileNumber); fd.append('movementId', movement.id); await authConfirm(fd); };
     const handleDelete = async () => { await authDelete(fileNumber, movement.id); };
@@ -299,7 +299,12 @@ const MovementDetails = ({ movement, index, total, fileNumber, fileSubject, isLa
     return (
         <div className="space-y-4">
             <div className="flex justify-between items-start"><h4 className="text-md font-semibold">Movement #{total - index}</h4><div className="flex items-center gap-2"><div className="flex gap-1"><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => setIsEditMode(true)}><Pencil className="h-4 w-4" /></Button>{isAdmin && (<Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => setIsDeleteAlertOpen(true)}><Trash2 className="h-4 w-4" /></Button>)}</div>{movement.receivedAt ? (<Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1.5 py-1"><CheckCircle2 className="h-3.5 w-3.5" /> Received</Badge>) : (!isRegistry ? (<Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 gap-1.5 py-1"><Truck className="h-3.5 w-3.5" /> In Transit</Badge>) : null)}{isLatest && !movement.receivedAt && !isRegistry && (<Button size="sm" variant="outline" onClick={handleConfirm} disabled={isConfirming}>{isConfirming ? 'Confirming...' : 'Confirm Receipt'}</Button>)}</div></div>
-            <div className="grid gap-4 sm:grid-cols-2"><DetailItem label="Date Moved" value={movement.date} /><DetailItem label="Moved To" value={movement.movedTo} /></div><DetailItem label="Status" value={movement.status} />{movement.receivedAt && (<div className="rounded-md bg-muted/50 p-3 flex items-start gap-3"><UserCheck className="h-4 w-4 text-muted-foreground mt-0.5" /><div className="space-y-1"><p className="text-sm font-medium">Receipt Acknowledged</p><p className="text-xs text-muted-foreground">By {movement.receivedBy} on {format(toDate(movement.receivedAt)!, 'PPP')}</p></div></div>)}
+            <div className="grid gap-4 sm:grid-cols-2">
+                <div><h4 className="text-xs font-semibold text-muted-foreground">Date Moved</h4><p className="text-sm">{toDate(movement.date) ? format(toDate(movement.date)!, 'PPP') : 'N/A'}</p></div>
+                <div><h4 className="text-xs font-semibold text-muted-foreground">Moved To</h4><p className="text-sm">{movement.movedTo}</p></div>
+            </div>
+            <div><h4 className="text-xs font-semibold text-muted-foreground">Status/Instructions</h4><p className="text-sm">{movement.status}</p></div>
+            {movement.receivedAt && (<div className="rounded-md bg-muted/50 p-3 flex items-start gap-3"><UserCheck className="h-4 w-4 text-muted-foreground mt-0.5" /><div className="space-y-1"><p className="text-sm font-medium">Receipt Acknowledged</p><p className="text-xs text-muted-foreground">By {movement.receivedBy} on {format(toDate(movement.receivedAt)!, 'PPP')}</p></div></div>)}
             <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete movement log?</AlertDialogTitle><AlertDialogDescription>This will remove this record from the history. If this was the latest location, the file's status will revert to the previous entry.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} variant="destructive" disabled={isDeleting}>{isDeleting ? 'Deleting...' : 'Delete'}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
         </div>
     );
@@ -321,7 +326,7 @@ export function FileDetailDialog({ file: initialFile, isOpen, onOpenChange, onDa
   const latestMovement = movements[0];
   const currentPossessorName = latestMovement?.movedTo || 'Registry';
   const sortedLetters = Array.isArray(initialFile.letters) ? [...initialFile.letters].sort((a,b) => new Date(toDate(b.date) || 0).getTime() - new Date(toDate(a.date) || 0).getTime()) : [];
-  const sortedInstructions = Array.isArray(initialFile.internalInstructions) ? [...initialFile.internalInstructions].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0)) : [];
+  const sortedInstructions = Array.isArray(initialFile.internalInstructions) ? [...initialFile.internalInstructions].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.date() || 0)) : [];
   const sortedAttachments = Array.isArray(initialFile.attachments) ? [...initialFile.attachments].sort((a,b) => (toDate(b.uploadedAt)?.getTime() || 0) - (toDate(a.uploadedAt)?.getTime() || 0)) : [];
   const completedMilestones = (initialFile.milestones || []).filter(m => m.isCompleted).length;
   const progress = (initialFile.milestones || []).length > 0 ? (completedMilestones / initialFile.milestones!.length) * 100 : 0;

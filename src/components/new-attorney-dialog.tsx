@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -30,6 +29,7 @@ import { createAttorney, updateAttorney } from '@/app/actions/attorney';
 import { useToast } from '@/hooks/use-toast';
 import type { Attorney } from '@/lib/types';
 import { useAuthAction } from '@/hooks/use-auth-action';
+import { cn } from '@/lib/utils';
 
 const FormSchema = z.object({
   fullName: z.string().min(1, 'Name is required.'),
