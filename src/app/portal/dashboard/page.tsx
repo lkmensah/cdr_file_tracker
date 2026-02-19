@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import jsPDF from 'jsPDF';
+import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { usePortal } from '@/components/portal-provider';
 import { useCollection, useFirestore, useMemoFirebase, useFirebase } from '@/firebase';
