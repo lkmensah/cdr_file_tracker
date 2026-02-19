@@ -176,7 +176,7 @@ export default function PortalDashboard() {
 
     const remindersQuery = useMemoFirebase(() => {
         if (!firestore || !attorney) return null;
-        return query(collection(firestore, 'reminders'), where('attorneyId', '==', attorney.id));
+        return query(collection(firestore, 'reminders'), where('attorneyId', '==', attorney.id), where('isCompleted', '==', false));
     }, [firestore, attorney]);
 
     const { data: allFiles, isLoading } = useCollection<CorrespondenceFile>(filesQuery);
@@ -385,11 +385,11 @@ export default function PortalDashboard() {
         myFiles.forEach(f => {
             (f.reminders || []).forEach(r => {
                 const reminderDate = toDate(r.date);
-                if (reminderDate) events.push({ id: r.id, date: reminderDate, text: r.text, type: 'deadline', fileNumber: f.fileNumber, fileId: f.id, isCompleted: r.isCompleted });
+                if (reminderDate) events.push({ id: r.id, date: reminderDate, text: r.text, type: 'deadline', fileNumber: f.fileNumber, fileId: f.id, isCompleted: r.isCompleted, isGeneral: false });
             });
             (f.letters || []).filter(l => l.type === 'Court Process' && l.hearingDate).forEach(l => {
                 const hearingDate = toDate(l.hearingDate);
-                if (hearingDate) events.push({ id: l.id, date: hearingDate, text: `HEARING: ${l.subject}`, type: 'court', fileNumber: f.fileNumber, fileId: f.id });
+                if (hearingDate) events.push({ id: l.id, date: hearingDate, text: `HEARING: ${l.subject}`, type: 'court', fileNumber: f.fileNumber, fileId: f.id, isGeneral: false });
             });
         });
         (personalReminders || []).forEach(r => {
@@ -402,8 +402,13 @@ export default function PortalDashboard() {
     const activeReminders = React.useMemo(() => calendarEvents.filter(e => e.type === 'deadline'), [calendarEvents]);
 
     const handleToggleReminder = async (fileNumber: string, id: string, isGeneral?: boolean) => {
-        if (isGeneral || fileNumber === 'General') await authToggleGeneralReminder(id);
-        else await authToggleReminder(fileNumber, id);
+        if (isGeneral || fileNumber === 'General') {
+            await authToggleGeneralReminder(id);
+            toast({ title: 'Personal Reminder Completed' });
+        } else {
+            await authToggleReminder(fileNumber, id);
+            toast({ title: 'Case Reminder Completed' });
+        }
     };
 
     const handleTogglePin = async (e: React.MouseEvent, fileId: string) => {
@@ -412,7 +417,7 @@ export default function PortalDashboard() {
         if (attorney) await authTogglePin(fileId, attorney.id);
     }
 
-    const handleOpenCreateDialog = (date: Date) => {
+    const handleOpenCreateDialog = (date: Date = new Date()) => {
         setSelectedDateForReminder(date);
         setIsCreateDialogOpen(true);
     };
@@ -653,14 +658,19 @@ export default function PortalDashboard() {
                         <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">{attorney?.rank || 'Practitioner'}</p>
                     </div>
                 </div>
-                <div className="flex items-center bg-muted/50 p-1 rounded-lg border">
-                    <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setViewMode('list')}><List className="h-4 w-4" /><span className="hidden sm:inline">List</span></Button>
-                    <Button variant={viewMode === 'calendar' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setViewMode('calendar')}><CalendarIcon className="h-4 w-4" /><span className="hidden sm:inline">Calendar</span></Button>
-                    {(attorney.isGroupHead || isSG) && (
-                        <Button variant={viewMode === 'monitoring' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setViewMode('monitoring')}><Activity className="h-4 w-4" /><span className="hidden sm:inline">{isSG ? 'Oversight' : 'Monitoring'}</span></Button>
-                    )}
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" className="h-8 gap-2 border-primary/20 text-primary hidden sm:flex" onClick={() => handleOpenCreateDialog()}>
+                        <Plus className="h-4 w-4" /> New Reminder
+                    </Button>
+                    <div className="flex items-center bg-muted/50 p-1 rounded-lg border">
+                        <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setViewMode('list')}><List className="h-4 w-4" /><span className="hidden sm:inline">List</span></Button>
+                        <Button variant={viewMode === 'calendar' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setViewMode('calendar')}><CalendarIcon className="h-4 w-4" /><span className="hidden sm:inline">Calendar</span></Button>
+                        {(attorney.isGroupHead || isSG) && (
+                            <Button variant={viewMode === 'monitoring' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setViewMode('monitoring')}><Activity className="h-4 w-4" /><span className="hidden sm:inline">{isSG ? 'Oversight' : 'Monitoring'}</span></Button>
+                        )}
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-destructive"><LogOut className="h-4 w-4 mr-2" /> <span className="hidden sm:inline">Logout</span></Button>
                 </div>
-                <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-destructive"><LogOut className="h-4 w-4 mr-2" /> <span className="hidden sm:inline">Logout</span></Button>
             </header>
 
             <main className="container mx-auto p-3 md:p-4 lg:p-6 xl:p-8 space-y-8 min-w-0">
@@ -790,20 +800,72 @@ export default function PortalDashboard() {
                             <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                             <Input placeholder={isSG ? "Search all active & completed files..." : "Search caseload by file, subject, or colleague..."} className="pl-12 h-12 text-lg shadow-sm bg-background border-primary/10 w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                         </div>
-                        {notifications.length > 0 && !searchTerm && (
-                            <section className="space-y-3 min-w-0">
-                                <h3 className="text-xs font-bold flex items-center gap-2 text-red-600 uppercase tracking-widest"><Bell className="h-4 w-4 fill-current animate-bounce" /> Recent Notifications</h3>
-                                <div className="grid gap-2">
-                                    {notifications.map(note => (
-                                        <Link key={note.id} href={`/portal/file/${note.fileId}`} className="min-w-0">
-                                            <Card className="hover:border-red-200 hover:bg-red-50/30 transition-all border-l-4 border-l-red-500 shadow-sm overflow-hidden">
-                                                <CardContent className="p-3 flex items-center justify-between min-w-0"><div className="flex items-center gap-3 min-w-0 flex-1"><div className="p-2 rounded-full bg-red-100 text-red-600 shrink-0">{note.type === 'communication' ? <MessageSquare className="h-4 w-4" /> : note.type === 'folio' ? <FileText className="h-4 w-4" /> : note.type === 'draft' ? <Pencil className="h-4 w-4" /> : <Truck className="h-4 w-4" />}</div><div className="space-y-0.5 min-w-0 flex-1"><p className="text-sm font-semibold leading-tight truncate">{note.message}</p><p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter truncate">File {note.fileNumber} • {formatDistanceToNow(note.timestamp)} ago</p></div></div><ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 ml-2" /></CardContent>
-                                            </Card>
-                                        </Link>
-                                    ))}
-                                </div>
-                            </section>
+
+                        {!searchTerm && (
+                            <div className="grid gap-8">
+                                {activeReminders.length > 0 && (
+                                    <section className="space-y-3 min-w-0">
+                                        <h3 className="text-xs font-bold flex items-center gap-2 text-primary uppercase tracking-widest">
+                                            <Clock className="h-4 w-4" /> Upcoming Deadlines & Reminders
+                                        </h3>
+                                        <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                                            {activeReminders.map(reminder => {
+                                                const isOverdue = isPast(reminder.date) && !isToday(reminder.date);
+                                                return (
+                                                    <Card key={reminder.id} className={cn(
+                                                        "border-l-4 shadow-sm hover:bg-muted/30 transition-colors cursor-pointer",
+                                                        isOverdue ? "border-l-destructive bg-destructive/5" : "border-l-primary bg-primary/5"
+                                                    )} onClick={() => reminder.fileId && (window.location.href = `/portal/file/${reminder.fileId}`)}>
+                                                        <CardContent className="p-3 flex items-center justify-between gap-3">
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    {isOverdue && <Badge variant="destructive" className="h-4 text-[8px] uppercase px-1">Overdue</Badge>}
+                                                                    <span className={cn("text-[9px] font-mono font-bold uppercase", reminder.fileNumber === 'General' ? "text-purple-600" : "text-primary")}>
+                                                                        {reminder.fileNumber === 'General' ? 'Personal Task' : `File ${reminder.fileNumber}`}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-sm font-semibold truncate leading-tight">{reminder.text}</p>
+                                                                <p className="text-[10px] text-muted-foreground mt-1 font-medium">
+                                                                    Due: {format(reminder.date, 'MMM d, p')}
+                                                                </p>
+                                                            </div>
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                size="icon" 
+                                                                className="h-8 w-8 shrink-0 hover:bg-green-100 hover:text-green-700"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    handleToggleReminder(reminder.fileNumber, reminder.id, reminder.isGeneral);
+                                                                }}
+                                                            >
+                                                                <CheckCircle2 className="h-5 w-5" />
+                                                            </Button>
+                                                        </CardContent>
+                                                    </Card>
+                                                );
+                                            })}
+                                        </div>
+                                    </section>
+                                )}
+
+                                {notifications.length > 0 && (
+                                    <section className="space-y-3 min-w-0">
+                                        <h3 className="text-xs font-bold flex items-center gap-2 text-red-600 uppercase tracking-widest"><Bell className="h-4 w-4 fill-current animate-bounce" /> Recent Activity</h3>
+                                        <div className="grid gap-2">
+                                            {notifications.map(note => (
+                                                <Link key={note.id} href={`/portal/file/${note.fileId}`} className="min-w-0">
+                                                    <Card className="hover:border-red-200 hover:bg-red-50/30 transition-all border-l-4 border-l-red-500 shadow-sm overflow-hidden">
+                                                        <CardContent className="p-3 flex items-center justify-between min-w-0"><div className="flex items-center gap-3 min-w-0 flex-1"><div className="p-2 rounded-full bg-red-100 text-red-600 shrink-0">{note.type === 'communication' ? <MessageSquare className="h-4 w-4" /> : note.type === 'folio' ? <FileText className="h-4 w-4" /> : note.type === 'draft' ? <Pencil className="h-4 w-4" /> : <Truck className="h-4 w-4" />}</div><div className="space-y-0.5 min-w-0 flex-1"><p className="text-sm font-semibold leading-tight truncate">{note.message}</p><p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter truncate">File {note.fileNumber} • {formatDistanceToNow(note.timestamp)} ago</p></div></div><ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 ml-2" /></CardContent>
+                                                    </Card>
+                                                </Link>
+                                            ))}
+                                        </div>
+                                    </section>
+                                )}
+                            </div>
                         )}
+
                         <div className="space-y-8 min-w-0">
                             {isSG ? (
                                 <section className="space-y-4 min-w-0"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><h3 className="text-xs font-bold flex items-center gap-2 text-yellow-600 uppercase tracking-widest"><LayoutDashboard className="h-4 w-4" /> Master File Registry</h3><Badge variant="outline" className="text-[10px] h-5 border-yellow-500 text-yellow-700 bg-yellow-50 uppercase font-bold w-fit">Executive Visibility</Badge></div><div className="grid gap-4 grid-cols-1 min-w-0">{paginatedAllFiles.map(file => <FileCard key={file.id} file={file} type="all" />)}</div>{totalPages > 1 && (<div className="flex flex-col sm:flex-row items-center justify-between border-t pt-6 gap-4"><p className="text-xs text-muted-foreground">Showing <span className="font-bold text-foreground">{(currentPage - 1) * PAGE_SIZE + 1}</span> to <span className="font-bold text-foreground">{Math.min(currentPage * PAGE_SIZE, caseloads.all.length)}</span> of <span className="font-bold text-foreground">{caseloads.all.length}</span> records</p><div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-8"><ChevronLeft className="h-4 w-4 mr-1" />Previous</Button><div className="text-xs font-bold px-3 py-1 bg-muted rounded-md border">Page {currentPage} of {totalPages}</div><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="h-8">Next<ChevronRightIcon className="h-4 w-4 ml-1" /></Button></div></div>)}</section>
