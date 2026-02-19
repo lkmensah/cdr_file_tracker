@@ -1,3 +1,4 @@
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -15,10 +16,14 @@ async function verifyAndGetUser(clientToken: string): Promise<{decodedToken: Dec
     try {
         const decodedToken = await adminAuth.verifyIdToken(clientToken);
         const userRecord = await adminAuth.getUser(decodedToken.uid);
-        const fullName = userRecord.displayName || decodedToken.name || decodedToken.email;
-        if (!fullName) {
-          throw new Error('User name could not be determined.');
-        }
+        
+        // Robust name detection for all user types (Staff, Admin, or Anonymous Practitioner)
+        const fullName = 
+            userRecord.displayName || 
+            decodedToken.name || 
+            decodedToken.email || 
+            (userRecord.providerData.length === 0 ? 'Portal Practitioner' : 'Authorized User');
+            
         return { decodedToken, fullName };
     } catch (error) {
         console.error("Error verifying auth token:", error);

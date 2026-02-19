@@ -1,3 +1,4 @@
+
 'use server';
 
 import type { CorrespondenceFile, Letter, Movement, ArchiveRecord, CensusRecord, Attorney, CaseReminder, InternalDraft, InternalInstruction, FileRequest, Milestone, Attachment, Reminder } from '@/lib/types';
@@ -194,18 +195,24 @@ export const markFileAsViewed = async (id: string, viewerId: string): Promise<vo
 }
 
 export const markAllFilesAsViewed = async (ids: string[], viewerId: string): Promise<void> => {
+    if (ids.length === 0) return;
+    
     const firestore = getFirestore(initializeAdmin());
-    const batch = firestore.batch();
     const now = FieldValue.serverTimestamp();
     
-    ids.forEach(id => {
-        const ref = getFileCollectionRef().doc(id);
-        batch.update(ref, {
-            [`viewedBy.${viewerId}`]: now
+    // Firestore limit: 500 operations per batch. Processing in chunks of 450.
+    const CHUNK_SIZE = 450;
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE);
+        const batch = firestore.batch();
+        chunk.forEach(id => {
+            const ref = getFileCollectionRef().doc(id);
+            batch.update(ref, {
+                [`viewedBy.${viewerId}`]: now
+            });
         });
-    });
-    
-    await batch.commit();
+        await batch.commit();
+    }
 }
 
 export const toggleFilePin = async (id: string, attorneyId: string): Promise<void> => {
@@ -388,98 +395,106 @@ export const moveFile = async (data: any): Promise<{ file?: CorrespondenceFile, 
 
 export const batchMoveFiles = async (data: any) => {
     const firestore = getFirestore(initializeAdmin());
-    const batch = firestore.batch();
-    
     const attorneySnap = await getAttorneyCollectionRef().get();
     const attorneys = attorneySnap.docs.map(d => docToType<Attorney>(d));
     
-    // Predetermine group if possible for specific movements
     const targetAttorney = attorneys.find(a => a.fullName.trim().toLowerCase() === data.movedTo.trim().toLowerCase());
     const recipientGroup = targetAttorney?.group?.trim() || 'no group yet';
 
-    for (const fileNum of data.fileNumbers) {
-        const snap = await getFileCollectionRef().where('fileNumber', '==', fileNum.trim()).get();
-        if (!snap.empty) {
-            const doc = snap.docs[0];
-            const fileData = doc.data();
-            const updatedRequests = (fileData.requests || []).filter((r: any) => r.requesterName.toLowerCase().trim() !== data.movedTo.toLowerCase().trim());
-            
-            const newMovement: Movement = {
-                id: `M-${Date.now()}-${Math.random().toString(36).substring(2,5)}`,
-                date: new Date(data.date),
-                movedTo: data.movedTo.trim(),
-                status: data.status.trim(),
-            };
+    const fileNumbers = data.fileNumbers as string[];
+    const CHUNK_SIZE = 450;
 
-            const updatePayload: any = {
-                movements: FieldValue.arrayUnion(newMovement),
-                requests: updatedRequests,
-                group: data.group || recipientGroup,
-                lastActivityAt: FieldValue.serverTimestamp()
-            };
+    for (let i = 0; i < fileNumbers.length; i += CHUNK_SIZE) {
+        const chunk = fileNumbers.slice(i, i + CHUNK_SIZE);
+        const batch = firestore.batch();
 
-            if (data.assignedTo) updatePayload.assignedTo = data.assignedTo.trim();
+        for (const fileNum of chunk) {
+            const snap = await getFileCollectionRef().where('fileNumber', '==', fileNum.trim()).limit(1).get();
+            if (!snap.empty) {
+                const doc = snap.docs[0];
+                const fileData = doc.data();
+                const updatedRequests = (fileData.requests || []).filter((r: any) => r.requesterName.toLowerCase().trim() !== data.movedTo.toLowerCase().trim());
+                
+                const newMovement: Movement = {
+                    id: `M-${Date.now()}-${Math.random().toString(36).substring(2,5)}`,
+                    date: new Date(data.date),
+                    movedTo: data.movedTo.trim(),
+                    status: data.status.trim(),
+                };
 
-            batch.update(doc.ref, updatePayload);
+                const updatePayload: any = {
+                    movements: FieldValue.arrayUnion(newMovement),
+                    requests: updatedRequests,
+                    group: data.group || recipientGroup,
+                    lastActivityAt: FieldValue.serverTimestamp()
+                };
+
+                if (data.assignedTo) updatePayload.assignedTo = data.assignedTo.trim();
+                batch.update(doc.ref, updatePayload);
+            }
         }
+        await batch.commit();
     }
-    await batch.commit();
     return { success: true };
 };
 
 export const batchPickupFiles = async (fileNumbers: string[], receivedBy: string) => {
     const firestore = getFirestore(initializeAdmin());
-    const batch = firestore.batch();
     const now = new Date();
-    
     const pickupResults: Record<string, { fullName: string, phoneNumber: string, files: { fileNumber: string, subject: string }[] }> = {};
 
     const attorneySnap = await getAttorneyCollectionRef().get();
     const attorneys = attorneySnap.docs.map(doc => docToType<Attorney>(doc));
 
-    for (const fileNum of fileNumbers) {
-        const snap = await getFileCollectionRef().where('fileNumber', '==', fileNum.trim()).limit(1).get();
-        if (!snap.empty) {
-            const doc = snap.docs[0];
-            const fileData = doc.data();
-            const movements = fileData.movements || [];
-            
-            const sortedMovements = [...movements].sort((a,b) => {
-                const dA = a.date instanceof Timestamp ? a.date.toDate() : new Date(a.date);
-                const dB = b.date instanceof Timestamp ? b.date.toDate() : new Date(b.date);
-                return dB.getTime() - dA.getTime();
-            });
-            const latest = sortedMovements[0];
-            const previousPossessor = latest?.movedTo || 'Registry';
+    const CHUNK_SIZE = 450;
+    for (let i = 0; i < fileNumbers.length; i += CHUNK_SIZE) {
+        const chunk = fileNumbers.slice(i, i + CHUNK_SIZE);
+        const batch = firestore.batch();
 
-            if (previousPossessor.toLowerCase() !== 'registry') {
-                const att = attorneys.find(a => a.fullName.toLowerCase().trim() === previousPossessor.toLowerCase().trim());
-                if (att) {
-                    if (!pickupResults[att.id]) {
-                        pickupResults[att.id] = { fullName: att.fullName, phoneNumber: att.phoneNumber, files: [] };
+        for (const fileNum of chunk) {
+            const snap = await getFileCollectionRef().where('fileNumber', '==', fileNum.trim()).limit(1).get();
+            if (!snap.empty) {
+                const doc = snap.docs[0];
+                const fileData = doc.data();
+                const movements = fileData.movements || [];
+                
+                const sortedMovements = [...movements].sort((a,b) => {
+                    const dA = a.date instanceof Timestamp ? a.date.toDate() : new Date(a.date);
+                    const dB = b.date instanceof Timestamp ? b.date.toDate() : new Date(b.date);
+                    return dB.getTime() - dA.getTime();
+                });
+                const latest = sortedMovements[0];
+                const previousPossessor = latest?.movedTo || 'Registry';
+
+                if (previousPossessor.toLowerCase() !== 'registry') {
+                    const att = attorneys.find(a => a.fullName.toLowerCase().trim() === previousPossessor.toLowerCase().trim());
+                    if (att) {
+                        if (!pickupResults[att.id]) {
+                            pickupResults[att.id] = { fullName: att.fullName, phoneNumber: att.phoneNumber, files: [] };
+                        }
+                        pickupResults[att.id].files.push({ fileNumber: fileData.fileNumber, subject: fileData.subject });
                     }
-                    pickupResults[att.id].files.push({ fileNumber: fileData.fileNumber, subject: fileData.subject });
                 }
+
+                const newMovement: Movement = {
+                    id: `M-PICKUP-${Date.now()}-${Math.random().toString(36).substring(2,7)}`,
+                    date: now,
+                    movedTo: 'Registry',
+                    status: 'Physically returned to Registry',
+                    receivedAt: now,
+                    receivedBy: receivedBy.trim()
+                };
+
+                batch.update(doc.ref, {
+                    movements: FieldValue.arrayUnion(newMovement),
+                    lastActivityAt: FieldValue.serverTimestamp(),
+                    requests: [],
+                    group: 'no group yet'
+                });
             }
-
-            const newMovement: Movement = {
-                id: `M-PICKUP-${Date.now()}-${Math.random().toString(36).substring(2,7)}`,
-                date: now,
-                movedTo: 'Registry',
-                status: 'Physically returned to Registry',
-                receivedAt: now,
-                receivedBy: receivedBy.trim()
-            };
-
-            batch.update(doc.ref, {
-                movements: FieldValue.arrayUnion(newMovement),
-                lastActivityAt: FieldValue.serverTimestamp(),
-                requests: [],
-                group: 'no group yet'
-            });
         }
+        await batch.commit();
     }
-    await batch.commit();
     return { success: true, summary: Object.values(pickupResults) };
 };
 
@@ -756,122 +771,140 @@ export const updateAttorney = async (id: string, data: any) => {
 
 export const propagateAttorneyGroupChange = async (attorneyName: string, newGroup: string) => {
     const firestore = getFirestore(initializeAdmin());
-    const batch = firestore.batch();
-    
     const filesSnapshot = await getFileCollectionRef().get();
 
     const normalizedName = attorneyName.trim().toLowerCase();
     const resolvedGroup = newGroup?.trim() || 'no group yet';
 
-    filesSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        let shouldUpdate = false;
+    const CHUNK_SIZE = 450;
+    const docs = filesSnapshot.docs;
 
-        // 1. Check Lead Assignee (normalized match)
-        if (data.assignedTo?.trim().toLowerCase() === normalizedName) {
-            shouldUpdate = true;
-        }
+    for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+        const chunk = docs.slice(i, i + CHUNK_SIZE);
+        const batch = firestore.batch();
+        let changedInBatch = false;
 
-        // 2. Check Physical Holder (normalized match from latest movement)
-        const movements = data.movements || [];
-        if (movements.length > 0) {
-            const sortedMovements = [...movements].sort((a,b) => {
-                const dA = a.date instanceof Timestamp ? a.date.toDate() : new Date(a.date);
-                const dB = b.date instanceof Timestamp ? b.date.toDate() : new Date(b.date);
-                if (dB.getTime() !== dA.getTime()) return dB.getTime() - dA.getTime();
-                return b.id.localeCompare(a.id);
-            });
-            const latest = sortedMovements[0];
-            if (latest?.movedTo?.trim().toLowerCase() === normalizedName) {
+        chunk.forEach(doc => {
+            const data = doc.data();
+            let shouldUpdate = false;
+
+            if (data.assignedTo?.trim().toLowerCase() === normalizedName) {
                 shouldUpdate = true;
             }
-        }
 
-        // Apply update if assigned/held AND group is out of sync
-        if (shouldUpdate && (data.group || 'no group yet').trim().toLowerCase() !== resolvedGroup.toLowerCase()) {
-            batch.update(doc.ref, { 
-                group: resolvedGroup,
-                lastActivityAt: FieldValue.serverTimestamp() 
-            });
-        }
-    });
+            const movements = data.movements || [];
+            if (movements.length > 0) {
+                const sortedMovements = [...movements].sort((a,b) => {
+                    const dA = a.date instanceof Timestamp ? a.date.toDate() : new Date(a.date);
+                    const dB = b.date instanceof Timestamp ? b.date.toDate() : new Date(b.date);
+                    if (dB.getTime() !== dA.getTime()) return dB.getTime() - dA.getTime();
+                    return b.id.localeCompare(a.id);
+                });
+                const latest = sortedMovements[0];
+                if (latest?.movedTo?.trim().toLowerCase() === normalizedName) {
+                    shouldUpdate = true;
+                }
+            }
 
-    await batch.commit();
+            if (shouldUpdate && (data.group || 'no group yet').trim().toLowerCase() !== resolvedGroup.toLowerCase()) {
+                batch.update(doc.ref, { 
+                    group: resolvedGroup,
+                    lastActivityAt: FieldValue.serverTimestamp() 
+                });
+                changedInBatch = true;
+            }
+        });
+
+        if (changedInBatch) await batch.commit();
+    }
 };
 
 export const propagateAttorneyNameChange = async (oldName: string, newName: string) => {
     const firestore = getFirestore(initializeAdmin());
     const filesSnapshot = await getFileCollectionRef().get();
     const censusSnapshot = await getCensusCollectionRef().where('attorney', '==', oldName.trim()).get();
-    const batch = firestore.batch();
     
     const normalizedOld = oldName.trim().toLowerCase();
     const trimmedNew = newName.trim();
 
+    // 1. Update Census (usually small enough for one batch)
+    const censusBatch = firestore.batch();
     censusSnapshot.docs.forEach(doc => {
-        batch.update(doc.ref, { attorney: trimmedNew });
+        censusBatch.update(doc.ref, { attorney: trimmedNew });
     });
+    await censusBatch.commit();
 
-    filesSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        let changed = false;
-        const updates: any = {};
+    // 2. Update Files (chunked)
+    const docs = filesSnapshot.docs;
+    const CHUNK_SIZE = 450;
 
-        if (data.assignedTo?.trim().toLowerCase() === normalizedOld) {
-            updates.assignedTo = trimmedNew;
-            changed = true;
-        }
+    for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+        const chunk = docs.slice(i, i + CHUNK_SIZE);
+        const batch = firestore.batch();
+        let changedInBatch = false;
 
-        if (data.coAssignees) {
-            const newCo = data.coAssignees.map((name: string) => 
-                name.trim().toLowerCase() === normalizedOld ? trimmedNew : name
-            );
-            if (JSON.stringify(newCo) !== JSON.stringify(data.coAssignees)) {
-                updates.coAssignees = newCo;
+        chunk.forEach(doc => {
+            const data = doc.data();
+            let changed = false;
+            const updates: any = {};
+
+            if (data.assignedTo?.trim().toLowerCase() === normalizedOld) {
+                updates.assignedTo = trimmedNew;
                 changed = true;
             }
-        }
 
-        if (data.movements) {
-            const newMovements = data.movements.map((m: any) => {
-                let mChanged = false;
-                if (m.movedTo?.trim().toLowerCase() === normalizedOld) { m.movedTo = trimmedNew; mChanged = true; }
-                if (m.receivedBy?.trim().toLowerCase() === normalizedOld) { m.receivedBy = trimmedNew; mChanged = true; }
-                if (mChanged) changed = true;
-                return m;
-            });
-            if (changed) updates.movements = newMovements;
-        }
-
-        if (data.internalInstructions) {
-            const newInstructions = data.internalInstructions.map((i: any) => {
-                let iChanged = false;
-                if (i.from?.trim().toLowerCase() === normalizedOld || i.from?.toLowerCase().includes(`(${normalizedOld})`)) { 
-                    i.from = i.from.replace(new RegExp(oldName.trim(), 'gi'), trimmedNew); 
-                    iChanged = true; 
-                }
-                if (i.to?.trim().toLowerCase() === normalizedOld) { i.to = trimmedNew; iChanged = true; }
-                if (iChanged) changed = true;
-                return i;
-            });
-            if (changed) updates.internalInstructions = newInstructions;
-        }
-
-        if (data.requests) {
-            const newRequests = data.requests.map((r: any) => {
-                if (r.requesterName?.trim().toLowerCase() === normalizedOld) {
+            if (data.coAssignees) {
+                const newCo = data.coAssignees.map((name: string) => 
+                    name.trim().toLowerCase() === normalizedOld ? trimmedNew : name
+                );
+                if (JSON.stringify(newCo) !== JSON.stringify(data.coAssignees)) {
+                    updates.coAssignees = newCo;
                     changed = true;
-                    return { ...r, requesterName: trimmedNew };
                 }
-                return r;
-            });
-            if (changed) updates.requests = newRequests;
-        }
+            }
 
-        if (changed) {
-            batch.update(doc.ref, { ...updates, lastActivityAt: FieldValue.serverTimestamp() });
-        }
-    });
+            if (data.movements) {
+                const newMovements = data.movements.map((m: any) => {
+                    let mChanged = false;
+                    if (m.movedTo?.trim().toLowerCase() === normalizedOld) { m.movedTo = trimmedNew; mChanged = true; }
+                    if (m.receivedBy?.trim().toLowerCase() === normalizedOld) { m.receivedBy = trimmedNew; mChanged = true; }
+                    if (mChanged) changed = true;
+                    return m;
+                });
+                if (changed) updates.movements = newMovements;
+            }
 
-    await batch.commit();
+            if (data.internalInstructions) {
+                const newInstructions = data.internalInstructions.map((i: any) => {
+                    let iChanged = false;
+                    if (i.from?.trim().toLowerCase() === normalizedOld || i.from?.toLowerCase().includes(`(${normalizedOld})`)) { 
+                        i.from = i.from.replace(new RegExp(oldName.trim(), 'gi'), trimmedNew); 
+                        iChanged = true; 
+                    }
+                    if (i.to?.trim().toLowerCase() === normalizedOld) { i.to = trimmedNew; iChanged = true; }
+                    if (iChanged) changed = true;
+                    return i;
+                });
+                if (changed) updates.internalInstructions = newInstructions;
+            }
+
+            if (data.requests) {
+                const newRequests = data.requests.map((r: any) => {
+                    if (r.requesterName?.trim().toLowerCase() === normalizedOld) {
+                        changed = true;
+                        return { ...r, requesterName: trimmedNew };
+                    }
+                    return r;
+                });
+                if (changed) updates.requests = newRequests;
+            }
+
+            if (changed) {
+                batch.update(doc.ref, { ...updates, lastActivityAt: FieldValue.serverTimestamp() });
+                changedInBatch = true;
+            }
+        });
+
+        if (changedInBatch) await batch.commit();
+    }
 };
