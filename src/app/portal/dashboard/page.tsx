@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import jsPDF from 'jspdf';
+import jsPDF from 'jsPDF';
 import autoTable from 'jspdf-autotable';
 import { usePortal } from '@/components/portal-provider';
 import { useCollection, useFirestore, useMemoFirebase, useFirebase } from '@/firebase';
@@ -102,6 +102,8 @@ import {
   ChartLegendContent,
   type ChartConfig
 } from "@/components/ui/chart";
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const categories = [
     { value: 'all', label: 'All Categories' },
@@ -313,7 +315,6 @@ export default function PortalDashboard() {
         return { chartData, workload };
     }, [caseloads.oversight, caseloads.completed, isSG]);
 
-    // Detach notifications and clearing from searchTerm filtering
     const myRelatedFiles = React.useMemo(() => {
         if (!allFiles || !attorney) return [];
         if (isSG) return allFiles;
@@ -331,7 +332,6 @@ export default function PortalDashboard() {
             const fileGroup = (file.group || 'no group yet').toLowerCase().trim();
             const canOversight = attorney.isGroupHead && fileGroup === myGroup;
             
-            // Note: We include completed files for notification purposes so folios/messages aren't missed
             if (isLead || isCoAssignee || isAtMyDesk || canOversight) {
                 unique.set(file.id, file);
             }
@@ -376,7 +376,7 @@ export default function PortalDashboard() {
             }
         });
         
-        return notes.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, isSG ? 10 : 5);
+        return notes.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 20);
     }, [myRelatedFiles, attorney, isSG]);
 
     const handleClearAllNotifications = async () => {
@@ -693,14 +693,72 @@ export default function PortalDashboard() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="flex items-center bg-muted/50 p-1 rounded-lg border">
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="ghost" size="icon" className="relative h-9 w-9">
+                                <Bell className="h-5 w-5 text-muted-foreground" />
+                                {notifications.length > 0 && (
+                                    <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-bold text-white ring-2 ring-background animate-in zoom-in-50">
+                                        {notifications.length}
+                                    </span>
+                                )}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[320px] sm:w-[400px] p-0 shadow-2xl overflow-hidden" align="end">
+                            <div className="flex items-center justify-between p-4 bg-muted/30 border-b">
+                                <h3 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
+                                    <Bell className="h-3.5 w-3.5" /> Recent Activity
+                                </h3>
+                                {notifications.length > 0 && (
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-7 text-[10px] uppercase font-bold text-muted-foreground hover:text-primary"
+                                        onClick={handleClearAllNotifications}
+                                        disabled={isClearing}
+                                    >
+                                        {isClearing ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle2 className="h-3 w-3 mr-1" />}
+                                        Clear All
+                                    </Button>
+                                )}
+                            </div>
+                            <ScrollArea className="max-h-[400px]">
+                                {notifications.length > 0 ? (
+                                    <div className="grid divide-y">
+                                        {notifications.map(note => (
+                                            <Link key={note.id} href={`/portal/file/${note.fileId}`} className="p-4 hover:bg-muted/50 transition-colors block">
+                                                <div className="flex items-start gap-3">
+                                                    <div className="p-2 rounded-full bg-red-100 text-red-600 shrink-0">
+                                                        {note.type === 'communication' ? <MessageSquare className="h-3.5 w-3.5" /> : note.type === 'folio' ? <FileText className="h-3.5 w-3.5" /> : note.type === 'draft' ? <Pencil className="h-3.5 w-3.5" /> : <Truck className="h-3.5 w-3.5" />}
+                                                    </div>
+                                                    <div className="space-y-1 min-w-0 flex-1">
+                                                        <p className="text-sm font-semibold leading-tight text-foreground truncate">{note.message}</p>
+                                                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter truncate">
+                                                            File {note.fileNumber} • {formatDistanceToNow(note.timestamp)} ago
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="p-12 text-center text-muted-foreground space-y-2">
+                                        <CheckCircle2 className="h-8 w-8 mx-auto opacity-20" />
+                                        <p className="text-xs italic">All caught up!</p>
+                                    </div>
+                                )}
+                            </ScrollArea>
+                        </PopoverContent>
+                    </Popover>
+
+                    <div className="flex items-center bg-muted/50 p-1 rounded-lg border ml-2">
                         <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setViewMode('list')}><List className="h-4 w-4" /><span className="hidden sm:inline">List</span></Button>
                         <Button variant={viewMode === 'calendar' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setViewMode('calendar')}><CalendarIcon className="h-4 w-4" /><span className="hidden sm:inline">Calendar</span></Button>
                         {(attorney.isGroupHead || isSG) && (
                             <Button variant={viewMode === 'monitoring' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setViewMode('monitoring')}><Activity className="h-4 w-4" /><span className="hidden sm:inline">{isSG ? 'Oversight' : 'Monitoring'}</span></Button>
                         )}
                     </div>
-                    <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-destructive"><LogOut className="h-4 w-4 mr-2" /> <span className="hidden sm:inline">Logout</span></Button>
+                    <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-destructive ml-2"><LogOut className="h-4 w-4 mr-2" /> <span className="hidden sm:inline">Logout</span></Button>
                 </div>
             </header>
 
@@ -876,35 +934,6 @@ export default function PortalDashboard() {
                                                     </Card>
                                                 );
                                             })}
-                                        </div>
-                                    </section>
-                                )}
-
-                                {notifications.length > 0 && (
-                                    <section className="space-y-3 min-w-0">
-                                        <div className="flex items-center justify-between">
-                                            <h3 className="text-xs font-bold flex items-center gap-2 text-red-600 uppercase tracking-widest">
-                                                <Bell className="h-4 w-4 fill-current animate-bounce" /> Recent Activity
-                                            </h3>
-                                            <Button 
-                                                variant="ghost" 
-                                                size="sm" 
-                                                className="h-7 text-[10px] uppercase font-bold text-muted-foreground hover:text-primary transition-colors"
-                                                onClick={handleClearAllNotifications}
-                                                disabled={isClearing}
-                                            >
-                                                {isClearing ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle2 className="h-3 w-3 mr-1" />}
-                                                Clear All
-                                            </Button>
-                                        </div>
-                                        <div className="grid gap-2">
-                                            {notifications.map(note => (
-                                                <Link key={note.id} href={`/portal/file/${note.fileId}`} className="min-w-0">
-                                                    <Card className="hover:border-red-200 hover:bg-red-50/30 transition-all border-l-4 border-l-red-500 shadow-sm overflow-hidden">
-                                                        <CardContent className="p-3 flex items-center justify-between min-w-0"><div className="flex items-center gap-3 min-0 flex-1"><div className="p-2 rounded-full bg-red-100 text-red-600 shrink-0">{note.type === 'communication' ? <MessageSquare className="h-4 w-4" /> : note.type === 'folio' ? <FileText className="h-4 w-4" /> : note.type === 'draft' ? <Pencil className="h-4 w-4" /> : <Truck className="h-4 w-4" />}</div><div className="space-y-0.5 min-w-0 flex-1"><p className="text-sm font-semibold leading-tight truncate">{note.message}</p><p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter truncate">File {note.fileNumber} • {formatDistanceToNow(note.timestamp)} ago</p></div></div><ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 ml-2" /></CardContent>
-                                                    </Card>
-                                                </Link>
-                                            ))}
                                         </div>
                                     </section>
                                 )}
