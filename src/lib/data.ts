@@ -378,19 +378,20 @@ export const batchMoveFiles = async (data: any) => {
         resolvedGroup = attorneySnap.docs[0].data().group || 'no group yet';
     }
 
-    const newMovement: Movement = {
-        id: `M-${Date.now()}`,
-        date: new Date(data.date),
-        movedTo: data.movedTo,
-        status: data.status,
-    };
-
     for (const fileNum of data.fileNumbers) {
         const snap = await getFileCollectionRef().where('fileNumber', '==', fileNum).get();
         if (!snap.empty) {
             const doc = snap.docs[0];
-            const updatedRequests = (doc.data()!.requests || []).filter((r: any) => r.requesterName.toLowerCase().trim() !== data.movedTo.toLowerCase().trim());
+            const fileData = doc.data();
+            const updatedRequests = (fileData.requests || []).filter((r: any) => r.requesterName.toLowerCase().trim() !== data.movedTo.toLowerCase().trim());
             
+            const newMovement: Movement = {
+                id: `M-${Date.now()}-${Math.random().toString(36).substring(2,5)}`,
+                date: new Date(data.date),
+                movedTo: data.movedTo,
+                status: data.status,
+            };
+
             const updatePayload: any = {
                 movements: FieldValue.arrayUnion(newMovement),
                 requests: updatedRequests,
@@ -731,39 +732,43 @@ export const propagateAttorneyGroupChange = async (attorneyName: string, newGrou
     const firestore = getFirestore(initializeAdmin());
     const batch = firestore.batch();
     
-    // Use a normalized iteration to handle potential case/whitespace mismatches safely
+    // Get ALL active files to check for Lead and current possession
     const filesSnapshot = await getFileCollectionRef()
         .where('status', '==', 'Active')
         .get();
 
     const normalizedName = attorneyName.toLowerCase().trim();
+    const normalizedTargetGroup = (newGroup || 'no group yet').toLowerCase().trim();
 
     filesSnapshot.docs.forEach(doc => {
         const data = doc.data();
         let shouldUpdate = false;
 
-        // 1. Is this attorney the Lead?
+        // 1. Is this attorney the Lead? (Matches name exactly or case-insensitively)
         if (data.assignedTo?.toLowerCase().trim() === normalizedName) {
             shouldUpdate = true;
         }
 
-        // 2. Is this a Miscellaneous file currently in this attorney's possession?
-        if (data.category?.toLowerCase() === 'miscellaneous') {
-            const movements = data.movements || [];
-            const latest = [...movements].sort((a,b) => {
-                const dA = a.date instanceof Timestamp ? a.date.toDate() : new Date(a.date);
-                const dB = b.date instanceof Timestamp ? b.date.toDate() : new Date(b.date);
-                return dB.getTime() - dA.getTime();
-            })[0];
-
-            if (latest?.movedTo?.toLowerCase().trim() === normalizedName) {
-                shouldUpdate = true;
-            }
+        // 2. Regardless of category, if the file is currently in this attorney's possession, it should follow them
+        const movements = data.movements || [];
+        const sortedMovements = [...movements].sort((a,b) => {
+            const dA = a.date instanceof Timestamp ? a.date.toDate() : new Date(a.date);
+            const dB = b.date instanceof Timestamp ? b.date.toDate() : new Date(b.date);
+            const timeDiff = dB.getTime() - dA.getTime();
+            if (timeDiff !== 0) return timeDiff;
+            return b.id.localeCompare(a.id);
+        });
+        
+        const latest = sortedMovements[0];
+        if (latest?.movedTo?.toLowerCase().trim() === normalizedName) {
+            shouldUpdate = true;
         }
 
-        if (shouldUpdate && data.group !== newGroup) {
+        const currentFileGroup = (data.group || 'no group yet').toLowerCase().trim();
+
+        if (shouldUpdate && currentFileGroup !== normalizedTargetGroup) {
             batch.update(doc.ref, { 
-                group: newGroup,
+                group: newGroup || 'no group yet',
                 lastActivityAt: FieldValue.serverTimestamp() 
             });
         }

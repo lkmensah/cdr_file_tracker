@@ -73,8 +73,12 @@ export async function updateAttorney(clientToken: string, formData: FormData) {
         const currentAttorney = await db.getAttorneyById(id);
         if (!currentAttorney) return { message: 'Attorney not found.' };
 
+        // Normalize group names for accurate comparison (handle undefined/null/empty as the same state)
+        const oldGroup = (currentAttorney.group || 'no group yet').trim().toLowerCase();
+        const newGroup = (validated.data.group || 'no group yet').trim().toLowerCase();
+        
         const nameChanged = currentAttorney.fullName !== validated.data.fullName;
-        const groupChanged = currentAttorney.group !== validated.data.group;
+        const groupChanged = oldGroup !== newGroup;
 
         await db.updateAttorney(id, validated.data);
 
@@ -84,12 +88,12 @@ export async function updateAttorney(clientToken: string, formData: FormData) {
             await logUserActivity(userName, 'UPDATE_ATTORNEY_NAME', `Renamed attorney from ${currentAttorney.fullName} to ${validated.data.fullName}. System-wide records updated.`);
         }
 
-        // 2. Handle Group Migration
-        if (groupChanged) {
+        // 2. Handle Group Migration (Crucial for existing files)
+        if (groupChanged || nameChanged) {
             const targetGroup = validated.data.group || 'no group yet';
             await db.propagateAttorneyGroupChange(validated.data.fullName, targetGroup);
-            await logUserActivity(userName, 'ATTORNEY_GROUP_MIGRATION', `Migrated ${validated.data.fullName} to ${targetGroup}. Records updated for oversight.`);
-        } else if (!nameChanged && !groupChanged) {
+            await logUserActivity(userName, 'ATTORNEY_GROUP_MIGRATION', `Migrated ${validated.data.fullName} to ${targetGroup}. Existing active and possessed files synchronized.`);
+        } else {
             await logUserActivity(userName, 'UPDATE_ATTORNEY', `Updated attorney details: ${validated.data.fullName}`);
         }
 
