@@ -153,7 +153,7 @@ const LetterDetails = ({ letter, index, total, fileNumber, onDataChange }: { let
         <div className="space-y-4">
             <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3"><div className='space-y-1'><h4 className="text-sm font-semibold">Folio #{total - index}</h4><Badge variant={ letter.type === 'Incoming' ? 'light-blue' : letter.type === 'Filing' ? 'warning' : letter.type === 'Court Process' ? 'info' : letter.type === 'Outgoing' ? 'default' : letter.type === 'Memo' ? 'destructive' : 'outline' }>{letter.type}</Badge></div></div>
-                <div className="flex items-center gap-1.5">{letter.scanUrl && (<Button variant="ghost" size="sm" className="h-8 gap-1.5 text-[10px] text-primary font-bold hover:bg-primary/10" onClick={() => window.open(letter.scanUrl, '_blank')}><Eye className="h-3.5 w-3.5" />View Scan</Button>)}<Button variant="outline" size="sm" className={cn("h-8 gap-2", letter.scanUrl && "border-green-200 text-green-700 bg-green-50")} onClick={() => setIsLinkingScan(!isLinkingScan)}><Paperclip className="h-3.5 w-3.5" />{letter.scanUrl ? 'Update' : 'Link Scan'}</Button><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => setIsEditMode(true)}><Pencil className="h-4 w-4" /></Button>{isAdmin && (<Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => setIsDeleteAlertOpen(true)}><Trash2 className="h-4 w-4" /></Button>)}{(letter.type === 'Incoming' || letter.type === 'Court Process') && (<Button variant="outline" size="sm" className="h-8 ml-1" onClick={() => setIsUnassignAlertOpen(true)}>Un-assign</Button>)}</div>
+                <div className="flex items-center gap-1.5">{letter.scanUrl && (<Button variant="ghost" size="sm" className="h-7 gap-1.5 text-[10px] text-primary font-bold hover:bg-primary/10" onClick={() => window.open(letter.scanUrl, '_blank')}><Eye className="h-3.5 w-3.5" />View Scan</Button>)}<Button variant="outline" size="sm" className={cn("h-8 gap-2", letter.scanUrl && "border-green-200 text-green-700 bg-green-50")} onClick={() => setIsLinkingScan(!isLinkingScan)}><Paperclip className="h-3.5 w-3.5" />{letter.scanUrl ? 'Update' : 'Link Scan'}</Button><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => setIsEditMode(true)}><Pencil className="h-4 w-4" /></Button>{isAdmin && (<Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => setIsDeleteAlertOpen(true)}><Trash2 className="h-4 w-4" /></Button>)}{(letter.type === 'Incoming' || letter.type === 'Court Process') && (<Button variant="outline" size="sm" className="h-8 ml-1" onClick={() => setIsUnassignAlertOpen(true)}>Un-assign</Button>)}</div>
             </div>
             {isLinkingScan && (<div className="bg-primary/5 p-3 rounded-md border border-primary/10 flex flex-col gap-3 animate-in fade-in slide-in-from-top-1"><div className="flex items-center gap-2"><AlertCircle className="h-3 w-3 text-primary" /><span className="text-[10px] font-bold uppercase tracking-widest text-primary">Paste SharePoint / Digital Scan URL</span></div><div className="flex gap-2"><Input placeholder="https://..." value={scanUrlInput} onChange={(e) => setScanUrlInput(e.target.value)} className="h-8 text-xs bg-background" /><Button size="sm" className="h-8 shrink-0" onClick={() => authUpdateScan(fileNumber, letter.id, scanUrlInput)} disabled={isSavingScan}>{isSavingScan ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}</Button></div></div>)}
             <div className="grid gap-4 sm:grid-cols-2 mt-4"><DetailItem label={getDynamicDateLabel(letter.type)} value={letter.date} />{letter.type === 'Court Process' && letter.hearingDate && (<DetailItem label="Hearing Date" value={letter.hearingDate} />)}{(letter.type === 'Incoming' || letter.type === 'Outgoing') && letter.dateOnLetter && (<DetailItem label="Date on Letter" value={letter.dateOnLetter} />)}<DetailItem label="Document No." value={letter.documentNo} /></div><DetailItem label="Subject" value={letter.subject} /><div className="grid gap-4 sm:grid-cols-2"><DetailItem label={getDynamicRecipientLabel(letter.type)} value={letter.recipient} />{(letter.type === 'Memo' || letter.type === 'Outgoing') && letter.signedBy && (<DetailItem label={letter.type === 'Memo' ? "From" : "Signed By"} value={letter.signedBy} />)}{(letter.type === 'Filing' || letter.type === 'Court Process') && letter.processType && (<DetailItem label="Type of Process" value={letter.processType} />)}{letter.type === 'Filing' && letter.serviceAddress && (<DetailItem label="Service Address" value={letter.serviceAddress} />)}</div><DetailItem label="Remarks" value={letter.remarks} />
@@ -164,6 +164,107 @@ const LetterDetails = ({ letter, index, total, fileNumber, onDataChange }: { let
     )
 }
 
+const MovementEditForm = ({ movement, fileNumber, attorneys, onCancel, onSuccess }: { movement: Movement, fileNumber: string, attorneys: Attorney[] | null, onCancel: () => void, onSuccess: () => void }) => {
+    const { toast } = useToast();
+    const { exec: authUpdate, isLoading } = useAuthAction(updateMovementInFile, {
+        onSuccess: (res) => {
+            if (res.success) {
+                toast({ title: 'Movement updated' });
+                onSuccess();
+            } else {
+                toast({ variant: 'destructive', title: 'Error', description: res.error });
+            }
+        }
+    });
+
+    const form = useForm({
+        resolver: zodResolver(z.object({
+            date: z.date(),
+            movedTo: z.string().min(1, 'Target is required'),
+            status: z.string().min(1, 'Instructions are required'),
+        })),
+        defaultValues: {
+            date: toDate(movement.date) || new Date(),
+            movedTo: movement.movedTo,
+            status: movement.status,
+        }
+    });
+
+    const attorneyOptions = React.useMemo(() => {
+        const list = (attorneys || []).map(a => ({ label: a.fullName, value: a.fullName }));
+        if (!list.some(o => o.value === 'Registry')) list.unshift({ label: 'Registry', value: 'Registry' });
+        return list;
+    }, [attorneys]);
+
+    const onSubmit = async (data: any) => {
+        const fd = new FormData();
+        fd.append('date', data.date.toISOString());
+        fd.append('movedTo', data.movedTo);
+        fd.append('status', data.status);
+        await authUpdate(fileNumber, movement.id, fd);
+    };
+
+    return (
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormField
+                        control={form.control}
+                        name="date"
+                        render={({ field }) => (
+                            <FormItem className="flex flex-col">
+                                <FormLabel>Movement Date</FormLabel>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <FormControl>
+                                            <Button variant="outline" className={cn("pl-3 text-left font-normal h-9", !field.value && "text-muted-foreground")}>
+                                                {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                            </Button>
+                                        </FormControl>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                                    </PopoverContent>
+                                </Popover>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="movedTo"
+                        render={({ field }) => (
+                            <FormItem className="flex flex-col">
+                                <FormLabel>Moved To</FormLabel>
+                                <div className="min-w-0">
+                                    <Combobox options={attorneyOptions} value={field.value} onChange={field.onChange} />
+                                </div>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                </div>
+                <FormField
+                    control={form.control}
+                    name="status"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Status / Instructions</FormLabel>
+                            <FormControl><Textarea {...field} className="min-h-[80px]" /></FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                <div className="flex justify-end gap-2 pt-2">
+                    <Button type="button" variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
+                    <Button type="submit" size="sm" disabled={isLoading}>{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save Changes</Button>
+                </div>
+            </form>
+        </Form>
+    );
+};
+
 const MovementDetails = ({ movement, index, total, fileNumber, fileSubject, isLatest, onDataChange }: { movement: Movement, index: number, total: number, fileNumber: string, fileSubject: string, isLatest: boolean, onDataChange: () => void }) => {
     const firestore = useFirestore();
     const { toast } = useToast();
@@ -172,11 +273,28 @@ const MovementDetails = ({ movement, index, total, fileNumber, fileSubject, isLa
     const [isEditMode, setIsEditMode] = React.useState(false);
     const attorneysQuery = useMemoFirebase(() => firestore ? collection(firestore, 'attorneys') : null, [firestore]);
     const { data: attorneys } = useCollection<Attorney>(attorneysQuery);
+    
     const { exec: authConfirm, isLoading: isConfirming } = useAuthAction(confirmFileReceipt, { onSuccess: (r) => { if (r && r.message?.includes('Success')) { toast({ title: 'Receipt Confirmed' }); onDataChange(); const dest = movement.movedTo; const target = attorneys?.find(a => a.fullName.toLowerCase() === dest.toLowerCase()); if (target?.phoneNumber) { const msg = encodeURIComponent(`Hello ${target.fullName},\n\nThe following file(s) have been delivered to your desk and confirmed received in the system:\n\n• ${fileNumber} - ${fileSubject}\n\nPlease verify physical receipt.\n\nThank you.`); window.open(`https://wa.me/${target.phoneNumber.replace(/\D/g, '')}?text=${msg}`, '_blank'); } } } });
     const { exec: authDelete, isLoading: isDeleting } = useAuthAction(deleteMovementFromFile, { onSuccess: () => { toast({ title: 'Movement record deleted' }); onDataChange(); setIsDeleteAlertOpen(false); } });
+    
     const handleConfirm = async () => { const fd = new FormData(); fd.append('fileNumber', fileNumber); fd.append('movementId', movement.id); await authConfirm(fd); };
     const handleDelete = async () => { await authDelete(fileNumber, movement.id); };
     const isRegistry = movement.movedTo?.toLowerCase() === 'registry';
+
+    if (isEditMode) {
+        return (
+            <div className="bg-muted/30 p-4 rounded-lg border border-primary/20 animate-in fade-in slide-in-from-top-1">
+                <div className="flex justify-between items-center mb-4"><h4 className="font-semibold text-sm">Edit Movement #{total - index}</h4><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsEditMode(false)}><Trash2 className="h-4 w-4" /></Button></div>
+                <MovementEditForm 
+                    movement={movement} 
+                    fileNumber={fileNumber} 
+                    attorneys={attorneys} 
+                    onCancel={() => setIsEditMode(false)} 
+                    onSuccess={() => { setIsEditMode(false); onDataChange(); }} 
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-4">
@@ -244,7 +362,7 @@ export function FileDetailDialog({ file: initialFile, isOpen, onOpenChange, onDa
                 )}
             </div>
             <Separator />
-            <Tabs defaultValue="communications"><TabsList className="grid grid-cols-3 mb-4"><TabsTrigger value="communications">Communications</TabsTrigger><TabsTrigger value="attachments">Attachments ({sortedAttachments.length})</TabsTrigger><TabsTrigger value="history">History</TabsTrigger></TabsList>
+            <Tabs defaultValue="history"><TabsList className="grid grid-cols-3 mb-4"><TabsTrigger value="communications">Communications</TabsTrigger><TabsTrigger value="attachments">Attachments ({sortedAttachments.length})</TabsTrigger><TabsTrigger value="history">History</TabsTrigger></TabsList>
                 <TabsContent value="communications" className="space-y-4"><h3 className="text-lg font-semibold flex items-center gap-2"><MessageSquare className="h-5 w-5 text-primary" />Case Communication</h3><div className="bg-muted/30 p-4 rounded-lg space-y-4 border border-primary/10"><div className="space-y-2"><h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Send Message to Current Possessor ({currentPossessorName})</h4><Textarea placeholder="Ask about file location, current status, or request its return..." value={inquiryText} onChange={(e) => setInquiryText(e.target.value)} className="bg-background min-h-[80px]" /><Button className="w-full h-9 gap-2" onClick={handleSendInquiry} disabled={isSendingInquiry || !inquiryText.trim()}>{isSendingInquiry ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Send Message</Button></div><div className="space-y-3 max-h-[250px] overflow-y-auto pr-2">{sortedInstructions.length > 0 ? sortedInstructions.map(msg => (<div key={msg.id} className="bg-background p-3 rounded-md border text-sm relative group"><div className="flex items-center justify-between mb-1"><div className="flex items-center gap-1.5 flex-wrap"><span className="text-[10px] font-bold text-primary uppercase">{msg.from}</span><span className="text-muted-foreground text-[10px]">→</span><span className="text-[10px] font-bold text-muted-foreground uppercase">{msg.to}</span></div><span className="text-[9px] text-muted-foreground font-mono">{toDate(msg.date) ? format(toDate(msg.date)!, 'MMM d, p') : 'N/A'}</span></div><p className="leading-relaxed text-muted-foreground italic">"{msg.text}"</p></div>)) : (<p className="text-center text-[10px] text-muted-foreground py-4 border border-dashed rounded-md">No communication history for this file.</p>)}</div></div></TabsContent>
                 <TabsContent value="attachments" className="space-y-4"><h3 className="text-lg font-semibold flex items-center gap-2"><Paperclip className="h-5 w-5 text-primary" />Practitioner Works & Files</h3><div className="grid gap-3">{sortedAttachments.length > 0 ? sortedAttachments.map(att => (<Card key={att.id}><CardContent className="p-4 flex items-center justify-between"><div className="flex items-center gap-3"><div className="p-2 bg-muted rounded"><FileIcon className="h-5 w-5 text-muted-foreground" /></div><div><p className="text-sm font-semibold leading-none">{att.name}</p><p className="text-[10px] text-muted-foreground uppercase mt-1.5">Uploaded by {att.uploadedBy} • {format(toDate(att.uploadedAt)!, 'p, MMM d')}</p></div></div><div className="flex items-center gap-1"><Button variant="ghost" size="icon" onClick={() => handleViewDocument(att)} title="View Document"><Eye className="h-4 w-4" /></Button>{(isAdmin || profile?.fullName === att.uploadedBy) && (<Button variant="ghost" size="icon" onClick={() => setAttachmentToDelete(att)} className="text-destructive hover:bg-destructive/10" title="Delete Document"><Trash2 className="h-4 w-4" /></Button>)}</div></CardContent></Card>)) : (<p className="text-sm text-muted-foreground text-center py-10 border border-dashed rounded-md">No attachments uploaded for this case yet.</p>)}</div></TabsContent>
                 <TabsContent value="history" className="space-y-6 pt-4"><div className="space-y-6"><h3 className="text-lg font-semibold flex items-center gap-2"><HistoryIcon className="h-5 w-5 text-primary" />Movement History</h3>{movements.length > 0 ? movements.map((m, i) => (<React.Fragment key={m.id}><MovementDetails movement={m} index={i} total={movements.length} fileNumber={initialFile.fileNumber} fileSubject={initialFile.subject} isLatest={i === 0} onDataChange={onDataChange} />{i < movements.length - 1 && <Separator />}</React.Fragment>)) : (<p className="text-sm text-muted-foreground">No movement history for this file yet.</p>)}</div><Separator /><div className="space-y-6"><h3 className="text-lg font-semibold flex items-center gap-2"><FileTextIcon className="h-5 w-5 text-primary" />Folios</h3>{sortedLetters.length > 0 ? sortedLetters.map((l, i) => (<React.Fragment key={l.id}><LetterDetails letter={l} index={i} total={sortedLetters.length} fileNumber={initialFile.fileNumber} onDataChange={onDataChange} />{i < sortedLetters.length - 1 && <Separator />}</React.Fragment>)) : (<p className="text-sm text-muted-foreground">No correspondence in this file yet.</p>)}</div></TabsContent>
