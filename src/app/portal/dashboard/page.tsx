@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -231,12 +232,13 @@ export default function PortalDashboard() {
             const isInMyGroup = (attorney.group || 'no group yet').toLowerCase().trim() === fileGroup;
             const canOversight = attorney.isGroupHead && isInMyGroup;
 
+            const isPinned = file.pinnedBy?.[attorney.id] === true;
             const wasPreviouslyInvolved = file.movements?.some(m => m.movedTo?.toLowerCase().trim() === myName);
 
-            if (isLead || isCoAssignee || isAtMyDesk || canOversight) {
+            if (isLead || isCoAssignee || isAtMyDesk || canOversight || isPinned) {
                 if (file.status === 'Completed') {
                     completed.push(file);
-                } else if (file.pinnedBy?.[attorney.id]) {
+                } else if (isPinned) {
                     pinned.push(file);
                 } else if (isLead) {
                     primary.push(file);
@@ -331,8 +333,10 @@ export default function PortalDashboard() {
             const isAtMyDesk = latestMovement?.movedTo?.toLowerCase().trim() === myName;
             const fileGroup = (file.group || 'no group yet').toLowerCase().trim();
             const canOversight = attorney.isGroupHead && fileGroup === myGroup;
+            const isPinned = file.pinnedBy?.[attorney.id] === true;
+            const isHistorical = file.movements?.some(m => m.movedTo?.toLowerCase().trim() === myName);
             
-            if (isLead || isCoAssignee || isAtMyDesk || canOversight) {
+            if (isLead || isCoAssignee || isAtMyDesk || canOversight || isPinned || isHistorical) {
                 unique.set(file.id, file);
             }
         });
@@ -343,23 +347,26 @@ export default function PortalDashboard() {
     const notifications = React.useMemo(() => {
         if (!myRelatedFiles || !attorney) return [];
         const notes: { id: string; fileId: string; fileNumber: string; message: string; timestamp: Date; type: 'communication' | 'folio' | 'draft' | 'movement' }[] = [];
-        const last24h = subHours(new Date(), 24);
+        const now = new Date();
+        const last24h = subHours(now, 24);
         const myName = attorney.fullName.toLowerCase().trim();
         
         myRelatedFiles.forEach(file => {
             const lastViewedAt = toDate(file.viewedBy?.[attorney.id]);
+            // If never viewed, check last 24 hours. Otherwise check since last clear.
             const referencePoint = lastViewedAt || last24h;
             
             (file.internalInstructions || []).forEach(i => {
                 const d = toDate(i.date);
-                if (d && isAfter(d, referencePoint) && i.from.toLowerCase().trim() !== myName) {
+                // Notification must be AFTER reference point AND NOT from user AND NOT in the future
+                if (d && isAfter(d, referencePoint) && !isAfter(d, now) && i.from.toLowerCase().trim() !== myName) {
                     notes.push({ id: i.id, fileId: file.id, fileNumber: file.fileNumber, message: `New message from ${i.from}`, timestamp: d, type: 'communication' });
                 }
             });
             
             (file.letters || []).forEach(l => {
                 const d = toDate(l.date);
-                if (d && isAfter(d, referencePoint)) {
+                if (d && isAfter(d, referencePoint) && !isAfter(d, now)) {
                     notes.push({ id: l.id, fileId: file.id, fileNumber: file.fileNumber, message: `New Folio: ${l.subject}`, timestamp: d, type: 'folio' });
                 }
             });
@@ -368,7 +375,7 @@ export default function PortalDashboard() {
             const latest = movements[0];
             if (latest) {
                 const d = toDate(latest.date);
-                if (d && isAfter(d, referencePoint)) {
+                if (d && isAfter(d, referencePoint) && !isAfter(d, now)) {
                     if (isSG || (latest.movedTo.toLowerCase().trim() === myName && latest.receivedBy?.toLowerCase().trim() !== myName)) {
                         notes.push({ id: latest.id, fileId: file.id, fileNumber: file.fileNumber, message: isSG ? `File moved to ${latest.movedTo}` : `File moved to your desk`, timestamp: d, type: 'movement' });
                     }
@@ -376,7 +383,8 @@ export default function PortalDashboard() {
             }
         });
         
-        return notes.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 20);
+        // Sort descending by timestamp
+        return notes.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 30);
     }, [myRelatedFiles, attorney, isSG]);
 
     const handleClearAllNotifications = async () => {
@@ -414,7 +422,8 @@ export default function PortalDashboard() {
             const isAtMyDesk = latestMovement?.movedTo?.toLowerCase().trim() === myName;
             const fileGroup = (file.group || 'no group yet').toLowerCase().trim();
             const isInMyGroup = attorney.isGroupHead && fileGroup === myGroup;
-            return (isLead || isCoAssignee || isAtMyDesk || isInMyGroup);
+            const isPinned = file.pinnedBy?.[attorney.id] === true;
+            return (isLead || isCoAssignee || isAtMyDesk || isInMyGroup || isPinned);
         });
         const events: { id: string; date: Date; text: string; type: 'deadline' | 'court'; fileNumber: string; fileId: string; isCompleted?: boolean; isGeneral?: boolean }[] = [];
         myFiles.forEach(f => {
