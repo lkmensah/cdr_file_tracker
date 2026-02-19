@@ -303,7 +303,7 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
                                 <div className="flex flex-col gap-1">
                                     <div className="flex items-center gap-1 text-[10px] text-muted-foreground min-w-0">
                                         <Clock className="h-3 w-3 shrink-0" />
-                                        <span className="truncate">Moved: {format(toDate(latestMovement.date)!, 'MMM d, p')}</span>
+                                        <span className="truncate">Moved: {format(toDate(latestMovement.date)!, 'MMM d, yyyy')}</span>
                                     </div>
                                     {latestMovement.receivedAt ? (
                                         <div className="flex flex-col gap-0.5">
@@ -311,7 +311,7 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
                                                 <CheckCircle2 className="h-2.5 w-2.5" /> Received
                                             </Badge>
                                             <span className="text-[10px] text-green-700 font-medium whitespace-nowrap ml-1">
-                                                On: {format(toDate(latestMovement.receivedAt)!, 'MMM d, p')}
+                                                On: {format(toDate(latestMovement.receivedAt)!, 'MMM d, yyyy')}
                                             </span>
                                         </div>
                                     ) : (

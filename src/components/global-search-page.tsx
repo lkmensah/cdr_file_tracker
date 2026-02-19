@@ -187,7 +187,7 @@ export function GlobalSearchPage({ allData }: { allData: AllData }) {
                                                         <div className="flex flex-col gap-1">
                                                             <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
                                                                 <Clock className="h-2.5 w-2.5" />
-                                                                <span className="whitespace-nowrap">Moved: {format(toDate(latestMovement.date)!, 'MMM d, p')}</span>
+                                                                <span className="whitespace-nowrap">Moved: {format(toDate(latestMovement.date)!, 'MMM d, yyyy')}</span>
                                                             </div>
                                                             {latestMovement.receivedAt ? (
                                                                 <div className="flex flex-col gap-0.5">
@@ -195,7 +195,7 @@ export function GlobalSearchPage({ allData }: { allData: AllData }) {
                                                                         <CheckCircle2 className="h-2.5 w-2.5" /> Received
                                                                     </Badge>
                                                                     <span className="text-[10px] text-green-700 font-medium whitespace-nowrap ml-1">
-                                                                        At: {format(toDate(latestMovement.receivedAt)!, 'MMM d, p')}
+                                                                        At: {format(toDate(latestMovement.receivedAt)!, 'MMM d, yyyy')}
                                                                     </span>
                                                                 </div>
                                                             ) : (
