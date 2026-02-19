@@ -1,4 +1,3 @@
-
 'use server';
 
 import type { CorrespondenceFile, Letter, Movement, ArchiveRecord, CensusRecord, Attorney, CaseReminder, InternalDraft, InternalInstruction, FileRequest, Milestone, Attachment, Reminder } from '@/lib/types';
@@ -708,6 +707,25 @@ export const getAttorneyById = async (id: string): Promise<Attorney | null> => {
 
 export const updateAttorney = async (id: string, data: any) => {
     await getAttorneyCollectionRef().doc(id).update(data);
+};
+
+export const propagateAttorneyGroupChange = async (attorneyName: string, newGroup: string) => {
+    const firestore = getFirestore(initializeAdmin());
+    const batch = firestore.batch();
+    
+    const filesSnapshot = await getFileCollectionRef()
+        .where('assignedTo', '==', attorneyName)
+        .where('status', '==', 'Active')
+        .get();
+
+    filesSnapshot.docs.forEach(doc => {
+        batch.update(doc.ref, { 
+            group: newGroup,
+            lastActivityAt: FieldValue.serverTimestamp() 
+        });
+    });
+
+    await batch.commit();
 };
 
 export const propagateAttorneyNameChange = async (oldName: string, newName: string) => {

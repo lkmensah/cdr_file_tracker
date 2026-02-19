@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -254,7 +253,7 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
           } else if (key === 'coAssignees' && Array.isArray(value)) {
             formData.append(key, value.join(','));
           } else if (isMiscellaneous && (key === 'group' || key === 'assignedTo' || key === 'coAssignees')) {
-            // Skip these for miscellaneous unless explicitly handled
+            // Skip these for miscellaneous
             return;
           } else {
             formData.append(key, value instanceof Date ? format(value, 'yyyy-MM-dd') : String(value));

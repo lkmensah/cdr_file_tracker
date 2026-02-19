@@ -1,4 +1,3 @@
-
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -70,17 +69,26 @@ export async function updateAttorney(clientToken: string, formData: FormData) {
     if (!validated.success) return { message: validated.error.errors[0].message };
 
     try {
-        // Fetch current attorney to check for name changes
+        // Fetch current attorney to check for name or group changes
         const currentAttorney = await db.getAttorneyById(id);
-        const nameChanged = currentAttorney && currentAttorney.fullName !== validated.data.fullName;
+        if (!currentAttorney) return { message: 'Attorney not found.' };
+
+        const nameChanged = currentAttorney.fullName !== validated.data.fullName;
+        const groupChanged = currentAttorney.group !== validated.data.group;
 
         await db.updateAttorney(id, validated.data);
 
-        // If name changed, propagate this to all files and records
+        // 1. Handle Name Change
         if (nameChanged) {
             await db.propagateAttorneyNameChange(currentAttorney.fullName, validated.data.fullName);
             await logUserActivity(userName, 'UPDATE_ATTORNEY_NAME', `Renamed attorney from ${currentAttorney.fullName} to ${validated.data.fullName}. System-wide records updated.`);
-        } else {
+        }
+
+        // 2. Handle Group Migration (New Group or joining a group for first time)
+        if (groupChanged && validated.data.group) {
+            await db.propagateAttorneyGroupChange(validated.data.fullName, validated.data.group);
+            await logUserActivity(userName, 'ATTORNEY_GROUP_MIGRATION', `Migrated ${validated.data.fullName} to ${validated.data.group}. Active lead files updated for oversight.`);
+        } else if (!nameChanged && !groupChanged) {
             await logUserActivity(userName, 'UPDATE_ATTORNEY', `Updated attorney details: ${validated.data.fullName}`);
         }
 

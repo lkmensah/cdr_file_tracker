@@ -194,10 +194,10 @@ export function Dashboard({
 
     const dateStr = format(toDate(reminder.date)!, 'PPp');
     
-    // Shorten title if too long
+    // Smart Truncation: include title shortened with ......
     const rawSubject = reminder.subject || '';
     const truncatedSubject = rawSubject.length > 60 
-        ? rawSubject.substring(0, 57) + "..." 
+        ? rawSubject.substring(0, 57) + "......" 
         : rawSubject;
 
     const fileDisplay = reminder.fileNumber === 'General'
