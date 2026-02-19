@@ -43,18 +43,16 @@ export async function createAttorney(clientToken: string, formData: FormData) {
     try {
         const name = validated.data.fullName.trim();
         const phone = validated.data.phoneNumber.trim();
-        const group = validated.data.group?.trim() || 'no group yet';
 
-        // Data Integrity: Check for existing attorney with same Name, Contact, and Group
+        // Data Integrity: Check for existing attorney with same Name and Contact (Regardless of Group)
         const firestore = getFirestore(initializeAdmin());
         const dupeCheck = await firestore.collection('attorneys')
             .where('fullName', '==', name)
             .where('phoneNumber', '==', phone)
-            .where('group', '==', group)
             .get();
 
         if (!dupeCheck.empty) {
-            return { message: 'Registration Error: An attorney with this name and phone number is already registered in this group.' };
+            return { message: 'Registration Error: A practitioner with this name and phone number is already in the system.' };
         }
 
         await db.createAttorney(validated.data);
@@ -89,21 +87,19 @@ export async function updateAttorney(clientToken: string, formData: FormData) {
         const currentAttorney = await db.getAttorneyById(id);
         if (!currentAttorney) return { message: 'Attorney not found.' };
 
-        // Data Integrity: Ensure update doesn't create a duplicate
+        // Data Integrity: Ensure update doesn't create a duplicate name/phone combination
         const name = validated.data.fullName.trim();
         const phone = validated.data.phoneNumber.trim();
-        const group = validated.data.group?.trim() || 'no group yet';
 
         const firestore = getFirestore(initializeAdmin());
         const dupeCheck = await firestore.collection('attorneys')
             .where('fullName', '==', name)
             .where('phoneNumber', '==', phone)
-            .where('group', '==', group)
             .get();
 
         const duplicate = dupeCheck.docs.find(doc => doc.id !== id);
         if (duplicate) {
-            return { message: 'Update Error: Another practitioner with these details is already registered.' };
+            return { message: 'Update Error: Another practitioner with this name and phone number is already registered.' };
         }
 
         // Normalize names and groups for comparison
