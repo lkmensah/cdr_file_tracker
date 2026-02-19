@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -258,7 +257,15 @@ export function MoveFileDialog({ isOpen, onOpenChange, files }: MoveFileDialogPr
                         </FormControl>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={field.value} onSelect={(date) => { if (date) field.onChange(date); setIsCalendarOpen(false); }} initialFocus />
+                        <Calendar 
+                          mode="single" 
+                          selected={field.value} 
+                          onSelect={(date) => { if (date) field.onChange(date); setIsCalendarOpen(false); }} 
+                          initialFocus 
+                          captionLayout="dropdown-buttons"
+                          fromYear={1950}
+                          toYear={new Date().getFullYear() + 1}
+                        />
                       </PopoverContent>
                     </Popover>
                     <FormMessage />

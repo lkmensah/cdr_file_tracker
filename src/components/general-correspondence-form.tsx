@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -254,7 +253,7 @@ export function GeneralCorrespondenceForm({ correspondenceType, letterToEdit, on
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           captionLayout="dropdown-buttons"
-                          fromYear={2000}
+                          fromYear={1950}
                           toYear={new Date().getFullYear()}
                           mode="single"
                           selected={field.value}
@@ -299,7 +298,7 @@ export function GeneralCorrespondenceForm({ correspondenceType, letterToEdit, on
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             captionLayout="dropdown-buttons"
-                            fromYear={2000}
+                            fromYear={1950}
                             toYear={new Date().getFullYear()}
                             mode="single"
                             selected={field.value}
@@ -345,8 +344,8 @@ export function GeneralCorrespondenceForm({ correspondenceType, letterToEdit, on
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             captionLayout="dropdown-buttons"
-                            fromYear={2000}
-                            toYear={new Date().getFullYear()}
+                            fromYear={1950}
+                            toYear={new Date().getFullYear() + 1}
                             mode="single"
                             selected={field.value}
                             onSelect={(date) => {

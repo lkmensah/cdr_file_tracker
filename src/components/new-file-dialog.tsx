@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -350,8 +349,8 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
                         <PopoverContent className="w-auto p-0" align="start">
                             <Calendar
                             captionLayout="dropdown-buttons"
-                            fromYear={2000}
-                            toYear={new Date().getFullYear()}
+                            fromYear={1950}
+                            toYear={new Date().getFullYear() + 1}
                             mode="single"
                             selected={field.value}
                             onSelect={(date) => {
