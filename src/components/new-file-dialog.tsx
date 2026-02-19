@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -141,9 +142,16 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
   const groupOptions = React.useMemo(() => {
     const groups = new Set<string>();
     attorneys?.forEach(a => {
-        if (a.group) groups.add(a.group);
+        if (a.group && a.group.trim() !== '') {
+            groups.add(a.group);
+        }
     });
-    return Array.from(groups).map(g => ({ label: g, value: g }));
+    const options = Array.from(groups).map(g => ({ label: g, value: g }));
+    
+    // Explicitly add "no group yet"
+    options.push({ label: 'no group yet', value: 'no group yet' });
+    
+    return options.sort((a, b) => a.label.localeCompare(b.label));
   }, [attorneys]);
   
   const handleActionSuccess = (result: any) => {
@@ -243,6 +251,16 @@ export function NewFile({ isOpen: controlledIsOpen, onOpenChange: controlledOnOp
       }
     }
   }, [file, isOpen, user, form]);
+
+  // Auto-populate group when lead practitioner is selected
+  React.useEffect(() => {
+    if (leadAssignee && attorneys && !isMiscellaneous) {
+        const found = attorneys.find(a => a.fullName === leadAssignee);
+        if (found) {
+            form.setValue('group', found.group || 'no group yet');
+        }
+    }
+  }, [leadAssignee, attorneys, form, isMiscellaneous]);
 
   const onSubmit = async (data: FormData) => {
     const formData = new FormData();

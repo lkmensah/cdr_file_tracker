@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -88,8 +89,17 @@ export function MoveFileDialog({ isOpen, onOpenChange, files }: MoveFileDialogPr
 
   const groupOptions = React.useMemo(() => {
     const groups = new Set<string>();
-    attorneys?.forEach(a => { if (a.group) groups.add(a.group); });
-    return Array.from(groups).map(g => ({ label: g, value: g }));
+    attorneys?.forEach(a => { 
+        if (a.group && a.group.trim() !== '') {
+            groups.add(a.group);
+        }
+    });
+    const options = Array.from(groups).map(g => ({ label: g, value: g }));
+    
+    // Explicitly add "no group yet"
+    options.push({ label: 'no group yet', value: 'no group yet' });
+    
+    return options.sort((a, b) => a.label.localeCompare(b.label));
   }, [attorneys]);
   
   const handleSuccess = (result: any) => {
