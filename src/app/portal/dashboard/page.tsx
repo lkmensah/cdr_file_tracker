@@ -4,7 +4,7 @@ import * as React from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { usePortal } from '@/components/portal-provider';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase, useFirebase } from '@/firebase';
 import type { CorrespondenceFile, Attorney, CaseReminder, Reminder } from '@/lib/types';
 import { collection, query, orderBy, where } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -69,7 +69,7 @@ import {
     formatDistanceToNow,
     differenceInDays
 } from 'date-fns';
-import { toggleReminder, addCaseReminder, toggleFilePin, addGeneralReminder, toggleGeneralReminder } from '@/app/actions';
+import { toggleReminder, addCaseReminder, toggleFilePin, addGeneralReminder, toggleGeneralReminder, markAllFilesAsViewed } from '@/app/actions';
 import { cn } from '@/lib/utils';
 import {
     Dialog,
@@ -147,6 +147,7 @@ const workloadChartConfig = {
 
 export default function PortalDashboard() {
     const { attorney, logout, isSG } = usePortal();
+    const { user } = useFirebase();
     const { toast } = useToast();
     const firestore = useFirestore();
     const [searchTerm, setSearchTerm] = React.useState('');
@@ -168,6 +169,7 @@ export default function PortalDashboard() {
     const { exec: authAddReminder } = useAuthAction(addCaseReminder);
     const { exec: authAddGeneralReminder } = useAuthAction(addGeneralReminder);
     const { exec: authToggleGeneralReminder } = useAuthAction(toggleGeneralReminder);
+    const { exec: authClearAllViewed, isLoading: isClearing } = useAuthAction(markAllFilesAsViewed);
 
     const filesQuery = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -351,6 +353,15 @@ export default function PortalDashboard() {
         });
         return notes.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, isSG ? 10 : 5);
     }, [myRelatedFiles, attorney, isSG]);
+
+    const handleClearAllNotifications = async () => {
+        if (!attorney || myRelatedFiles.length === 0) return;
+        const fileIds = myRelatedFiles.map(f => f.id);
+        const result = await authClearAllViewed(fileIds, attorney.id);
+        if (result.success) {
+            toast({ title: 'Notifications Cleared', description: 'All current activities marked as read.' });
+        }
+    };
 
     const availableFiles = React.useMemo(() => {
         if (isSG) return allFiles?.filter(f => f.status !== 'Completed') || [];
@@ -846,7 +857,21 @@ export default function PortalDashboard() {
 
                                 {notifications.length > 0 && (
                                     <section className="space-y-3 min-w-0">
-                                        <h3 className="text-xs font-bold flex items-center gap-2 text-red-600 uppercase tracking-widest"><Bell className="h-4 w-4 fill-current animate-bounce" /> Recent Activity</h3>
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-xs font-bold flex items-center gap-2 text-red-600 uppercase tracking-widest">
+                                                <Bell className="h-4 w-4 fill-current animate-bounce" /> Recent Activity
+                                            </h3>
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                className="h-7 text-[10px] uppercase font-bold text-muted-foreground hover:text-primary transition-colors"
+                                                onClick={handleClearAllNotifications}
+                                                disabled={isClearing}
+                                            >
+                                                {isClearing ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle2 className="h-3 w-3 mr-1" />}
+                                                Clear All
+                                            </Button>
+                                        </div>
                                         <div className="grid gap-2">
                                             {notifications.map(note => (
                                                 <Link key={note.id} href={`/portal/file/${note.fileId}`} className="min-w-0">

@@ -1,4 +1,3 @@
-
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -196,6 +195,12 @@ export async function updateFile(
 export async function markFileAsViewed(clientToken: string, id: string, viewerId: string): Promise<void> {
     await verifyAndGetUser(clientToken);
     await db.markFileAsViewed(id, viewerId);
+}
+
+export async function markAllFilesAsViewed(clientToken: string, fileIds: string[], viewerId: string): Promise<{ success: boolean }> {
+    await verifyAndGetUser(clientToken);
+    await db.markAllFilesAsViewed(fileIds, viewerId);
+    return { success: true };
 }
 
 export async function toggleFilePin(clientToken: string, id: string, attorneyId: string): Promise<void> {

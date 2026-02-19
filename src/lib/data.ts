@@ -193,6 +193,21 @@ export const markFileAsViewed = async (id: string, viewerId: string): Promise<vo
     });
 }
 
+export const markAllFilesAsViewed = async (ids: string[], viewerId: string): Promise<void> => {
+    const firestore = getFirestore(initializeAdmin());
+    const batch = firestore.batch();
+    const now = FieldValue.serverTimestamp();
+    
+    ids.forEach(id => {
+        const ref = getFileCollectionRef().doc(id);
+        batch.update(ref, {
+            [`viewedBy.${viewerId}`]: now
+        });
+    });
+    
+    await batch.commit();
+}
+
 export const toggleFilePin = async (id: string, attorneyId: string): Promise<void> => {
     const fileRef = getFileCollectionRef().doc(id);
     const doc = await fileRef.get();
