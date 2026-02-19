@@ -652,7 +652,7 @@ export default function PortalDashboard() {
                                 <Badge variant="secondary" className="bg-muted text-muted-foreground text-[8px] h-4 uppercase font-bold px-1.5 py-0">Practitioner</Badge>
                             )}
                         </div>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">{attorney?.group || 'General Division'}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">{attorney?.group || 'no group yet'}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">

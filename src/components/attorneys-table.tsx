@@ -89,7 +89,7 @@ export function AttorneysTable({ attorneys, onEdit }: { attorneys: Attorney[], o
                 ) : (
                     <div className="flex items-center gap-1.5 text-muted-foreground italic text-xs">
                         <User className="h-3 w-3" />
-                        <span>General / No Group</span>
+                        <span>no group yet</span>
                     </div>
                 )}
               </TableCell>
