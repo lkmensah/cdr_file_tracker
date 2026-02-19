@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { DashboardChart } from './dashboard-chart';
 import { WorkloadAnalytics } from './workload-analytics';
 import React from 'react';
-import { cn } from '@/lib/utils';
+import { cn, truncate } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -172,8 +172,9 @@ export function Dashboard({
         const destination = file.latestMovement.movedTo;
         const targetAttorney = attorneys?.find(a => a.fullName.toLowerCase() === destination.toLowerCase());
         if (targetAttorney?.phoneNumber) {
+            const truncatedSubject = truncate(file.subject, 60);
             const message = encodeURIComponent(
-                `Hello ${targetAttorney.fullName},\n\nThe following file(s) have been delivered to your desk and confirmed received in the system:\n\n• ${file.fileNumber} - ${file.subject}\n\nPlease verify physical receipt.\n\nThank you.`
+                `Hello ${targetAttorney.fullName},\n\nThe following file(s) have been delivered to your desk and confirmed received in the system:\n\n• ${file.fileNumber} - ${truncatedSubject}\n\nPlease verify physical receipt.\n\nThank you.`
             );
             window.open(`https://wa.me/${targetAttorney.phoneNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
         }
@@ -193,12 +194,7 @@ export function Dashboard({
     }
 
     const dateStr = format(toDate(reminder.date)!, 'PPp');
-    
-    // Smart Truncation: include title shortened with ......
-    const rawSubject = reminder.subject || '';
-    const truncatedSubject = rawSubject.length > 60 
-        ? rawSubject.substring(0, 57) + "......" 
-        : rawSubject;
+    const truncatedSubject = truncate(reminder.subject || '', 60);
 
     const fileDisplay = reminder.fileNumber === 'General'
         ? 'General Activity'
@@ -236,7 +232,7 @@ export function Dashboard({
         const result = await authConfirmReceipt(formData);
         if (result && result.message?.includes('Success')) {
             successCount++;
-            confirmedFilesInfo.push(`• ${file.fileNumber} - ${file.subject}`);
+            confirmedFilesInfo.push(`• ${file.fileNumber} - ${truncate(file.subject, 60)}`);
         }
     }
     

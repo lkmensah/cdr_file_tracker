@@ -22,7 +22,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { MoreHorizontal, FileText, ChevronDown, ChevronRight, FilePlus2, Send, Pencil, CheckCircle2, Truck, Clock, Trash2, FolderCheck, FolderOpen, Files, Sparkles, HandIcon } from 'lucide-react';
 import { FileDetailDialog } from './file-detail-dialog';
 import { NewCorrespondenceDialog } from './new-correspondence-dialog';
-import { cn } from '@/lib/utils';
+import { cn, truncate } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { MoveFileDialog } from './move-file-dialog';
 import { BatchPickupDialog } from './batch-pickup-dialog';
@@ -169,8 +169,9 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
             const destination = movement.movedTo;
             const targetAttorney = attorneys?.find(a => a.fullName.toLowerCase() === destination.toLowerCase());
             if (targetAttorney?.phoneNumber) {
+                const truncatedSubject = truncate(file.subject, 60);
                 const message = encodeURIComponent(
-                    `Hello ${targetAttorney.fullName},\n\nThe following file(s) have been delivered to your desk and confirmed received in the system:\n\n• ${file.fileNumber} - ${file.subject}\n\nPlease verify physical receipt.\n\nThank you.`
+                    `Hello ${targetAttorney.fullName},\n\nThe following file(s) have been delivered to your desk and confirmed received in the system:\n\n• ${file.fileNumber} - ${truncatedSubject}\n\nPlease verify physical receipt.\n\nThank you.`
                 );
                 window.open(`https://wa.me/${targetAttorney.phoneNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
             }

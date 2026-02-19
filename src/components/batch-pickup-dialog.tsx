@@ -16,6 +16,7 @@ import { MessageCircle, CheckCircle2, User, FileText, Loader2 } from 'lucide-rea
 import { useAuthAction } from '@/hooks/use-auth-action';
 import { batchPickupFiles } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
+import { truncate } from '@/lib/utils';
 
 interface BatchPickupDialogProps {
     isOpen: boolean;
@@ -52,7 +53,7 @@ export function BatchPickupDialog({ isOpen, onOpenChange, fileNumbers }: BatchPi
     };
 
     const handleSendWhatsApp = (attorney: any) => {
-        const fileList = attorney.files.map((f: any, i: number) => `${i + 1}. ${f.fileNumber} - ${f.subject}`).join('\n');
+        const fileList = attorney.files.map((f: any, i: number) => `${i + 1}. ${f.fileNumber} - ${truncate(f.subject, 60)}`).join('\n');
         const message = encodeURIComponent(
             `Hello ${attorney.fullName},\n\nThe Registry has physically picked up the following ${attorney.files.length} file(s) from your office:\n\n${fileList}\n\nThese have been marked as 'Received' by the Registry in the tracking system. Please verify physical transfer.\n\nThank you.`
         );

@@ -22,7 +22,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
+import { cn, truncate } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Button } from './ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -166,7 +166,7 @@ const LetterDetails = ({ letter, index, total, fileNumber, onDataChange }: { let
 
 const MovementEditForm = ({ movement, fileNumber, attorneys, onCancel, onSuccess }: { movement: Movement, fileNumber: string, attorneys: Attorney[] | null, onCancel: () => void, onSuccess: () => void }) => {
     const { toast } = useToast();
-    const { exec: authUpdate, isLoading } = useAuthAction(updateMovementInFile, {
+    const { exec: authUpdate, isLoading: isUpdating } = useAuthAction(updateMovementInFile, {
         onSuccess: (res) => {
             if (res.success) {
                 toast({ title: 'Movement updated' });
@@ -207,7 +207,7 @@ const MovementEditForm = ({ movement, fileNumber, attorneys, onCancel, onSuccess
     return (
         <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <FormField
                         control={form.control}
                         name="date"
@@ -258,7 +258,7 @@ const MovementEditForm = ({ movement, fileNumber, attorneys, onCancel, onSuccess
                 />
                 <div className="flex justify-end gap-2 pt-2">
                     <Button type="button" variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
-                    <Button type="submit" size="sm" disabled={isLoading}>{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save Changes</Button>
+                    <Button type="submit" size="sm" disabled={isUpdating}>{isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save Changes</Button>
                 </div>
             </form>
         </Form>
@@ -274,7 +274,7 @@ const MovementDetails = ({ movement, index, total, fileNumber, fileSubject, isLa
     const attorneysQuery = useMemoFirebase(() => firestore ? collection(firestore, 'attorneys') : null, [firestore]);
     const { data: attorneys } = useCollection<Attorney>(attorneysQuery);
     
-    const { exec: authConfirm, isLoading: isConfirming } = useAuthAction(confirmFileReceipt, { onSuccess: (r) => { if (r && r.message?.includes('Success')) { toast({ title: 'Receipt Confirmed' }); onDataChange(); const dest = movement.movedTo; const target = attorneys?.find(a => a.fullName.toLowerCase() === dest.toLowerCase()); if (target?.phoneNumber) { const msg = encodeURIComponent(`Hello ${target.fullName},\n\nThe following file(s) have been delivered to your desk and confirmed received in the system:\n\n• ${fileNumber} - ${fileSubject}\n\nPlease verify physical receipt.\n\nThank you.`); window.open(`https://wa.me/${target.phoneNumber.replace(/\D/g, '')}?text=${msg}`, '_blank'); } } } });
+    const { exec: authConfirm, isLoading: isConfirming } = useAuthAction(confirmFileReceipt, { onSuccess: (r) => { if (r && r.message?.includes('Success')) { toast({ title: 'Receipt Confirmed' }); onDataChange(); const dest = movement.movedTo; const target = attorneys?.find(a => a.fullName.toLowerCase() === dest.toLowerCase()); if (target?.phoneNumber) { const truncatedSubject = truncate(fileSubject, 60); const msg = encodeURIComponent(`Hello ${target.fullName},\n\nThe following file(s) have been delivered to your desk and confirmed received in the system:\n\n• ${fileNumber} - ${truncatedSubject}\n\nPlease verify physical receipt.\n\nThank you.`); window.open(`https://wa.me/${target.phoneNumber.replace(/\D/g, '')}?text=${msg}`, '_blank'); } } } });
     const { exec: authDelete, isLoading: isDeleting } = useAuthAction(deleteMovementFromFile, { onSuccess: () => { toast({ title: 'Movement record deleted' }); onDataChange(); setIsDeleteAlertOpen(false); } });
     
     const handleConfirm = async () => { const fd = new FormData(); fd.append('fileNumber', fileNumber); fd.append('movementId', movement.id); await authConfirm(fd); };
