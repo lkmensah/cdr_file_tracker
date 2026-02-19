@@ -113,7 +113,8 @@ export function WorkloadAnalytics({
             inProgress: data.inProgress,
             completed: data.completed,
         }))
-        .sort((a, b) => (b.inProgress + b.completed) - (a.inProgress + a.completed));
+        .sort((a, b) => (b.inProgress + b.completed) - (a.inProgress + a.completed))
+        .slice(0, 10); // Display only top 10 highest workloads
 
     return { workload, chartData };
   }, [files, attorneys]);
@@ -127,7 +128,7 @@ export function WorkloadAnalytics({
                     <Users className="h-5 w-5 text-primary" />
                     Attorney Workload
                 </CardTitle>
-                <CardDescription>Active burden (All Time) vs. Resolved ({new Date().getFullYear()})</CardDescription>
+                <CardDescription>Top 10: Active burden (All Time) vs. Resolved ({new Date().getFullYear()})</CardDescription>
             </div>
         </div>
       </CardHeader>
