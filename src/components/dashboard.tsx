@@ -1,7 +1,7 @@
 'use client';
 
 import type { CorrespondenceFile, Letter, Movement, Attorney, CaseReminder, FileRequest, Reminder } from '@/lib/types';
-import { Folder, Mail, Scale, Truck, CheckCircle2, Loader2, UserCheck, Users, Calendar, MessageCircle, MessageSquare, FileText, AlertCircle, HandIcon, Clock, Bell, History, Zap } from 'lucide-react';
+import { Folder, Mail, Scale, Truck, CheckCircle2, Loader2, UserCheck, Users, Calendar, MessageCircle, MessageSquare, FileText, AlertCircle, HandIcon, Clock, Bell, History, Zap, AlarmClock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DashboardChart } from './dashboard-chart';
 import { WorkloadAnalytics } from './workload-analytics';
@@ -28,7 +28,7 @@ import { confirmFileReceipt, toggleReminder, cancelFileRequest, markFileAsViewed
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
-import { format, isPast, isToday, formatDistanceToNow, subHours, isAfter } from 'date-fns';
+import { format, isPast, isToday, formatDistanceToNow, subHours, isAfter, addHours } from 'date-fns';
 import { Badge } from './ui/badge';
 import { useProfile } from './auth-provider';
 import { FileDetailDialog } from './file-detail-dialog';
@@ -69,7 +69,14 @@ export function Dashboard({
   const { isAdmin, profile } = useProfile();
   const [isInTransitOpen, setIsInTransitOpen] = React.useState(false);
   const [selectedFileId, setSelectedFileId] = React.useState<string | null>(null);
+  const [currentTime, setCurrentTime] = React.useState(new Date());
   const { toast } = useToast();
+
+  // Heartbeat to trigger "Due Soon" logic while page is open
+  React.useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const attorneysQuery = useMemoFirebase(() => firestore ? collection(firestore, 'attorneys') : null, [firestore]);
   const { data: attorneys } = useCollection<Attorney>(attorneysQuery);
@@ -131,6 +138,15 @@ export function Dashboard({
         return dA.getTime() - dB.getTime();
     });
   }, [initialFiles, generalReminders]);
+
+  // Triggered Reminders: Due in the next 60 minutes
+  const triggeredReminders = React.useMemo(() => {
+    const oneHourFromNow = addHours(currentTime, 1);
+    return allUpcomingReminders.filter(reminder => {
+        const d = toDate(reminder.date);
+        return d && d > currentTime && d <= oneHourFromNow;
+    });
+  }, [allUpcomingReminders, currentTime]);
 
   const groupedInTransit = React.useMemo(() => {
     const groups: Record<string, typeof inTransitFiles> = {};
@@ -250,18 +266,67 @@ export function Dashboard({
 
   return (
     <div className="container mx-auto space-y-8 pb-12 min-w-0 px-3 md:px-4 lg:px-6 xl:px-8">
+        {/* Statistics Grid */}
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard title="Total Files" value={initialFiles.length} icon={Folder} />
             <StatCard title="Files in Transit" value={inTransitFiles.length} icon={Truck} colorClass={inTransitFiles.length > 0 ? "text-yellow-500" : ""} onClick={() => setIsInTransitOpen(true)} />
             <StatCard title="Total Incoming Mail" value={initialIncomingMail.length} icon={Mail} />
             <StatCard title="Total Court Processes" value={initialCourtProcesses.length} icon={Scale} />
         </div>
+
+        {/* Action Center: Triggered Reminders (Next 60 Minutes) */}
+        {triggeredReminders.length > 0 && (
+            <div className="animate-in fade-in slide-in-from-top-4 duration-500">
+                <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4 sm:p-6 shadow-md relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-2 opacity-10">
+                        <AlarmClock className="h-24 w-24 text-amber-600 rotate-12" />
+                    </div>
+                    <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div className="flex items-center gap-4 text-center md:text-left">
+                            <div className="bg-amber-100 p-3 rounded-full border border-amber-300 animate-pulse">
+                                <Zap className="h-6 w-6 text-amber-600 fill-current" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-black text-amber-900 uppercase tracking-tight">Immediate Action Required</h3>
+                                <p className="text-sm text-amber-700 font-medium">You have {triggeredReminders.length} reminder(s) due within the next hour.</p>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap justify-center gap-3 w-full md:w-auto">
+                            {triggeredReminders.map(r => (
+                                <Card key={r.id} className="bg-white/80 border-amber-200 shadow-sm w-full sm:w-[280px]">
+                                    <CardContent className="p-3 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <Badge variant="destructive" className="bg-amber-600 text-white animate-pulse text-[9px] uppercase tracking-tighter h-4">Due Soon</Badge>
+                                            <span className="text-[10px] font-mono font-bold text-amber-800">{r.fileNumber}</span>
+                                        </div>
+                                        <p className="text-xs font-bold truncate leading-tight">{r.text}</p>
+                                        <div className="flex items-center justify-between gap-2 pt-1">
+                                            <p className="text-[10px] text-amber-600 font-black">{format(toDate(r.date)!, 'p')}</p>
+                                            <Button 
+                                                size="sm" 
+                                                className="h-7 text-[9px] bg-amber-600 hover:bg-amber-700 gap-1.5"
+                                                onClick={() => handleSendReminder(r)}
+                                            >
+                                                <MessageCircle className="h-3 w-3" />
+                                                Notify Lead
+                                            </Button>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
         
+        {/* Primary Analytics */}
         <div className="grid gap-8 grid-cols-1 lg:grid-cols-2">
             <DashboardChart files={initialFiles} />
             <WorkloadAnalytics files={initialFiles} attorneys={attorneys || []} />
         </div>
 
+        {/* Physical File Requests Queue */}
         <div className="grid gap-8 grid-cols-1 min-w-0">
             <Card className="shadow-sm border-primary/10 overflow-hidden">
                 <CardHeader className="pb-3 border-b">
@@ -330,6 +395,7 @@ export function Dashboard({
             </Card>
         </div>
 
+        {/* System-wide Deadline Monitoring */}
         <div className="grid gap-8 min-w-0">
             <Card className="shadow-sm border-primary/10 overflow-hidden">
                 <CardHeader className="pb-3 border-b">
@@ -356,14 +422,21 @@ export function Dashboard({
                                 {allUpcomingReminders.length > 0 ? allUpcomingReminders.map(reminder => {
                                     const d = toDate(reminder.date)!;
                                     const isOverdue = isPast(d) && !isToday(d);
+                                    
+                                    // Identify items due in the next hour
+                                    const isDueSoon = d > currentTime && d <= addHours(currentTime, 1);
+
                                     return (
-                                        <TableRow key={reminder.id}>
+                                        <TableRow key={reminder.id} className={cn(isDueSoon && "bg-amber-50/50 border-l-4 border-l-amber-500 transition-all")}>
                                             <TableCell>
                                                 <div className="flex flex-col">
-                                                    <span className={cn("font-bold text-xs", isOverdue ? "text-destructive" : "text-primary")}>
+                                                    <span className={cn("font-bold text-xs", isOverdue ? "text-destructive" : isDueSoon ? "text-amber-600" : "text-primary")}>
                                                         {format(d, 'MMM d, p')}
                                                     </span>
-                                                    <span className="text-[10px] text-muted-foreground uppercase">{isToday(d) ? 'Today' : isOverdue ? 'Overdue' : format(d, 'EEEE')}</span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-[10px] text-muted-foreground uppercase">{isToday(d) ? 'Today' : isOverdue ? 'Overdue' : format(d, 'EEEE')}</span>
+                                                        {isDueSoon && <Badge variant="destructive" className="bg-amber-600 h-3 text-[7px] px-1 animate-pulse border-none">Urgent</Badge>}
+                                                    </div>
                                                 </div>
                                             </TableCell>
                                             <TableCell>
@@ -376,18 +449,18 @@ export function Dashboard({
                                                     <span className={cn("text-[10px] font-mono font-bold uppercase truncate", reminder.fileNumber === 'General' ? "text-purple-600" : "text-muted-foreground")}>
                                                         {reminder.fileNumber}
                                                     </span>
-                                                    <p className="text-xs truncate" title={reminder.text}>{reminder.text}</p>
+                                                    <p className="text-xs truncate font-semibold" title={reminder.text}>{reminder.text}</p>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <Button 
                                                     size="sm" 
-                                                    variant="outline" 
-                                                    className="h-8 gap-2 border-green-200 hover:bg-green-50 hover:text-green-700 hover:border-green-300"
+                                                    variant={isDueSoon ? "default" : "outline"}
+                                                    className={cn("h-8 gap-2", isDueSoon ? "bg-amber-600 hover:bg-amber-700" : "border-green-200 hover:bg-green-50 hover:text-green-700 hover:border-green-300")}
                                                     onClick={() => handleSendReminder(reminder)}
                                                 >
                                                     <MessageCircle className="h-3.5 w-3.5" />
-                                                    <span className="hidden sm:inline">WhatsApp</span>
+                                                    <span className="hidden sm:inline">{isDueSoon ? 'Notify Now' : 'WhatsApp'}</span>
                                                 </Button>
                                             </TableCell>
                                         </TableRow>
@@ -406,6 +479,7 @@ export function Dashboard({
             </Card>
         </div>
 
+        {/* Dialogs */}
         <Dialog open={isInTransitOpen} onOpenChange={setIsInTransitOpen}>
             <DialogContent className="w-[95vw] sm:max-w-4xl max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
@@ -430,13 +504,20 @@ export function Dashboard({
                                 <div className="rounded-md border overflow-hidden">
                                     <div className="w-full overflow-x-auto">
                                         <Table className="min-w-[600px]">
-                                            <TableHeader><TableRow className="bg-muted/50"><TableHead className="w-[120px]">File No.</TableHead><TableHead>Subject</TableHead><TableHead className="w-[150px]">Date Moved</TableHead><TableHead className="text-right w-[100px]">Action</TableHead></TableRow></TableHeader>
+                                            <TableHeader>
+                                                <TableRow className="bg-muted/50">
+                                                    <TableHead className="w-[120px]">File No.</TableHead>
+                                                    <TableHead>Subject</TableHead>
+                                                    <TableHead className="w-[150px]">Date Moved</TableHead>
+                                                    <TableHead className="text-right w-[100px]">Action</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
                                             <TableBody>
                                                 {files.map((file) => {
                                                     const moveDate = toDate(file.latestMovement.date);
                                                     return (
                                                     <TableRow key={file.id}>
-                                                        <TableCell className="font-medium whitespace-nowrap">{file.fileNumber}</TableCell>
+                                                        <TableCell className="font-medium whitespace-nowrap">*{file.fileNumber}*</TableCell>
                                                         <TableCell className="max-w-0">
                                                             <p className="truncate text-sm" title={file.subject}>{file.subject}</p>
                                                         </TableCell>
