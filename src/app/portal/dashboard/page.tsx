@@ -313,33 +313,57 @@ export default function PortalDashboard() {
         return { chartData, workload };
     }, [caseloads.oversight, caseloads.completed, isSG]);
 
+    // Detach notifications and clearing from searchTerm filtering
     const myRelatedFiles = React.useMemo(() => {
-        if (isSG) return allFiles || [];
+        if (!allFiles || !attorney) return [];
+        if (isSG) return allFiles;
+        
+        const myName = attorney.fullName.toLowerCase().trim();
+        const myGroup = attorney.group?.toLowerCase().trim();
         const unique = new Map<string, CorrespondenceFile>();
-        [...caseloads.pinned, ...caseloads.primary, ...caseloads.collaborative, ...caseloads.action, ...caseloads.oversight].forEach(f => unique.set(f.id, f));
+        
+        allFiles.forEach(file => {
+            const isLead = file.assignedTo?.toLowerCase().trim() === myName;
+            const isCoAssignee = file.coAssignees?.some(name => name.toLowerCase().trim() === myName);
+            const movements = [...(file.movements || [])].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0));
+            const latestMovement = movements[0];
+            const isAtMyDesk = latestMovement?.movedTo?.toLowerCase().trim() === myName;
+            const fileGroup = (file.group || 'no group yet').toLowerCase().trim();
+            const canOversight = attorney.isGroupHead && fileGroup === myGroup;
+            
+            // Note: We include completed files for notification purposes so folios/messages aren't missed
+            if (isLead || isCoAssignee || isAtMyDesk || canOversight) {
+                unique.set(file.id, file);
+            }
+        });
+        
         return Array.from(unique.values());
-    }, [caseloads, allFiles, isSG]);
+    }, [allFiles, attorney, isSG]);
 
     const notifications = React.useMemo(() => {
-        if (isSG || !myRelatedFiles || !attorney) return [];
+        if (!myRelatedFiles || !attorney) return [];
         const notes: { id: string; fileId: string; fileNumber: string; message: string; timestamp: Date; type: 'communication' | 'folio' | 'draft' | 'movement' }[] = [];
         const last24h = subHours(new Date(), 24);
         const myName = attorney.fullName.toLowerCase().trim();
+        
         myRelatedFiles.forEach(file => {
             const lastViewedAt = toDate(file.viewedBy?.[attorney.id]);
             const referencePoint = lastViewedAt || last24h;
+            
             (file.internalInstructions || []).forEach(i => {
                 const d = toDate(i.date);
                 if (d && isAfter(d, referencePoint) && i.from.toLowerCase().trim() !== myName) {
                     notes.push({ id: i.id, fileId: file.id, fileNumber: file.fileNumber, message: `New message from ${i.from}`, timestamp: d, type: 'communication' });
                 }
             });
+            
             (file.letters || []).forEach(l => {
                 const d = toDate(l.date);
                 if (d && isAfter(d, referencePoint)) {
                     notes.push({ id: l.id, fileId: file.id, fileNumber: file.fileNumber, message: `New Folio: ${l.subject}`, timestamp: d, type: 'folio' });
                 }
             });
+            
             const movements = [...(file.movements || [])].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0));
             const latest = movements[0];
             if (latest) {
@@ -351,6 +375,7 @@ export default function PortalDashboard() {
                 }
             }
         });
+        
         return notes.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, isSG ? 10 : 5);
     }, [myRelatedFiles, attorney, isSG]);
 
