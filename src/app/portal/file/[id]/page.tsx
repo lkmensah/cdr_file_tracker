@@ -164,27 +164,42 @@ export default function PortalFileDetail() {
     const [selectedTime, setSelectedTime] = React.useState('09:00');
     const [isCalendarOpen, setIsCalendarOpen] = React.useState(false);
 
-    const movements = React.useMemo(() => [...(file?.movements || [])].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0)), [file?.movements]);
+    // Access & Possession Logic
+    const movements = React.useMemo(() => {
+        return [...(file?.movements || [])].sort((a, b) => {
+            const dateA = toDate(a.date)?.getTime() || 0;
+            const dateB = toDate(b.date)?.getTime() || 0;
+            if (dateB !== dateA) return dateB - dateA;
+            // Fallback to ID for stable sorting if timestamps are identical
+            return b.id.localeCompare(a.id);
+        });
+    }, [file?.movements]);
+
     const latestMovement = movements[0];
     const currentPossessorName = latestMovement?.movedTo || 'Registry';
     
     const myName = attorney?.fullName.toLowerCase().trim();
-    const isPossessor = currentPossessorName.toLowerCase().trim() === myName;
-    const isLead = file?.assignedTo?.toLowerCase().trim() === myName;
-    const isTeamMember = file?.coAssignees?.some(name => name.toLowerCase().trim() === myName);
+    const isPossessor = !!myName && currentPossessorName.toLowerCase().trim() === myName;
+    const isLead = !!myName && file?.assignedTo?.toLowerCase().trim() === myName;
+    const isTeamMember = !!myName && file?.coAssignees?.some(name => name.toLowerCase().trim() === myName);
     
     const fileGroup = file?.group?.toLowerCase().trim();
     const myGroup = attorney?.group?.toLowerCase().trim();
-    const isInMyGroup = (attorney?.isGroupHead && !!myGroup && fileGroup === myGroup) || isSG;
+    const isInMyGroup = (attorney?.isGroupHead && !!myGroup && myGroup !== 'no group yet' && fileGroup === myGroup) || isSG;
 
-    const wasPreviouslyInvolved = file?.movements?.some(m => m.movedTo?.toLowerCase().trim() === myName);
-    const isHistoricalOnly = !isSG && !isLead && !isTeamMember && !isPossessor && !isInMyGroup && wasPreviouslyInvolved;
+    const wasPreviouslyInvolved = !!myName && file?.movements?.some(m => m.movedTo?.toLowerCase().trim() === myName);
+    
+    // User has active access if they are the SG, Lead, Team Member, Group Head, or Current Possessor.
+    const hasActiveAccess = isSG || isLead || isTeamMember || isPossessor || isInMyGroup;
+    
+    // Historical access is ONLY when the user was involved but currently has no active role or possession.
+    const isHistoricalOnly = !hasActiveAccess && wasPreviouslyInvolved;
 
     const hasPendingRequest = (file?.requests || []).some(r => r.requesterId === attorney?.id);
     const isPinned = file?.pinnedBy?.[attorney?.id || ''] === true;
     const isCompleted = file?.status === 'Completed';
 
-    const canInteract = (isLead || isTeamMember || isPossessor || isInMyGroup) && !isCompleted && !isHistoricalOnly;
+    const canInteract = hasActiveAccess && !isCompleted && !isHistoricalOnly;
 
     React.useEffect(() => {
         if (file && attorney) {
