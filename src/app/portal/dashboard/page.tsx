@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -659,9 +658,6 @@ export default function PortalDashboard() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="h-8 gap-2 border-primary/20 text-primary hidden sm:flex" onClick={() => handleOpenCreateDialog()}>
-                        <Plus className="h-4 w-4" /> New Reminder
-                    </Button>
                     <div className="flex items-center bg-muted/50 p-1 rounded-lg border">
                         <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setViewMode('list')}><List className="h-4 w-4" /><span className="hidden sm:inline">List</span></Button>
                         <Button variant={viewMode === 'calendar' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setViewMode('calendar')}><CalendarIcon className="h-4 w-4" /><span className="hidden sm:inline">Calendar</span></Button>
