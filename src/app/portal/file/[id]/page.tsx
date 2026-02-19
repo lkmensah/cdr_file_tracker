@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { usePortal } from '@/components/portal-provider';
 import { useDoc, useFirestore, useFirebase, useCollection, useMemoFirebase } from '@/firebase';
-import type { CorrespondenceFile, InternalDraft, InternalInstruction, Milestone, Attachment, Attorney } from '@/lib/types';
+import type { CorrespondenceFile, InternalDraft, InternalInstruction, Milestone, Attachment, Attorney, Letter, Movement } from '@/lib/types';
 import { doc, collection, query, orderBy } from 'firebase/firestore';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -47,7 +47,7 @@ import {
     Banknote,
     Users
 } from 'lucide-react';
-import { addInternalDraft, updateInternalDraft, deleteInternalDraft, addCaseReminder, toggleReminder, addInternalInstruction, markFileAsViewed, requestFile, toggleFilePin, toggleFileStatus, updateMilestones, deleteFileAttachment } from '@/app/actions';
+import { addInternalDraft, updateInternalDraft, deleteInternalDraft, addCaseReminder, toggleReminder, addInternalInstruction, markFileAsViewed, requestFile, toggleFilePin, toggleFileStatus, updateMilestones, deleteFileAttachment, updateLetterInFile, confirmFileReceipt, deleteLetterFromFile, deleteMovementFromFile } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -82,12 +82,11 @@ import {
     AccordionContent,
     AccordionItem,
     AccordionTrigger,
-} from "@/components/ui/accordion";
+} from "@/components/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combobox } from '@/components/ui/combobox';
 import { refineDraft } from '@/ai/flows/refine-draft';
 import { downloadLegalDoc } from '@/lib/download-docx';
-import { useProfile } from '@/components/auth-provider';
 
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -199,6 +198,10 @@ export default function PortalFileDetail() {
 
     if (isLoading) return <div className="p-8 text-center text-muted-foreground animate-pulse">Loading case details...</div>;
     if (!file) return <div className="p-8 text-center">File not found.</div>;
+
+    const onDataChange = () => {
+        // Real-time updates handled by useDoc hook
+    };
 
     const handleAIRefine = async (instruction: string) => {
         const content = editor?.getHTML() || '';
@@ -423,3 +426,40 @@ export default function PortalFileDetail() {
 
 function HistoryIcon(props: any) { return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg> }
 function FileTextIcon(props: any) { return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg> }
+
+const LetterDetails = ({ letter, index, total, fileNumber, onDataChange }: { letter: Letter, index: number, total: number, fileNumber: string, onDataChange: () => void }) => {
+    return (
+        <div className="space-y-4">
+            <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3"><div className='space-y-1'><h4 className="text-sm font-semibold">Folio #{total - index}</h4><Badge variant="outline">{letter.type}</Badge></div></div>
+                {letter.scanUrl && (<Button variant="ghost" size="sm" className="h-8 gap-1.5 text-[10px] text-primary font-bold hover:bg-primary/10" onClick={() => window.open(letter.scanUrl, '_blank')}><Eye className="h-3.5 w-3.5" />View Scan</Button>)}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 mt-4">
+                <div><h4 className="text-xs font-semibold text-muted-foreground">Date</h4><p className="text-sm">{toDate(letter.date) ? format(toDate(letter.date)!, 'PPP') : 'N/A'}</p></div>
+                <div><h4 className="text-xs font-semibold text-muted-foreground">Doc No.</h4><p className="text-sm">{letter.documentNo || 'N/A'}</p></div>
+            </div>
+            <div><h4 className="text-xs font-semibold text-muted-foreground">Subject</h4><p className="text-sm">{letter.subject}</p></div>
+            <div><h4 className="text-xs font-semibold text-muted-foreground">Source/Recipient</h4><p className="text-sm">{letter.recipient}</p></div>
+            {letter.remarks && (<div><h4 className="text-xs font-semibold text-muted-foreground">Remarks</h4><p className="text-sm italic">"{letter.remarks}"</p></div>)}
+        </div>
+    )
+};
+
+const MovementDetails = ({ movement, index, total, fileNumber, fileSubject, isLatest, onDataChange }: { movement: Movement, index: number, total: number, fileNumber: string, fileSubject: string, isLatest: boolean, onDataChange: () => void }) => {
+    const { toast } = useToast();
+    const { exec: authConfirm, isLoading: isConfirming } = useAuthAction(confirmFileReceipt, { onSuccess: (r) => { if (r && r.message?.includes('Success')) { toast({ title: 'Receipt Confirmed' }); onDataChange(); } } });
+    const handleConfirm = async () => { const fd = new FormData(); fd.append('fileNumber', fileNumber); fd.append('movementId', movement.id); await authConfirm(fd); };
+    const isRegistry = movement.movedTo?.toLowerCase() === 'registry';
+
+    return (
+        <div className="space-y-4">
+            <div className="flex justify-between items-start"><h4 className="text-md font-semibold">Movement #{total - index}</h4><div className="flex items-center gap-2">{movement.receivedAt ? (<Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1.5 py-1"><CheckCircle2 className="h-3.5 w-3.5" /> Received</Badge>) : (!isRegistry ? (<Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 gap-1.5 py-1"><Truck className="h-3.5 w-3.5" /> In Transit</Badge>) : null)}{isLatest && !movement.receivedAt && !isRegistry && (<Button size="sm" variant="outline" onClick={handleConfirm} disabled={isConfirming}>{isConfirming ? 'Confirming...' : 'Confirm Receipt'}</Button>)}</div></div>
+            <div className="grid gap-4 sm:grid-cols-2">
+                <div><h4 className="text-xs font-semibold text-muted-foreground">Date Moved</h4><p className="text-sm">{toDate(movement.date) ? format(toDate(movement.date)!, 'PPP') : 'N/A'}</p></div>
+                <div><h4 className="text-xs font-semibold text-muted-foreground">Moved To</h4><p className="text-sm">{movement.movedTo}</p></div>
+            </div>
+            <div><h4 className="text-xs font-semibold text-muted-foreground">Status/Instructions</h4><p className="text-sm">{movement.status}</p></div>
+            {movement.receivedAt && (<div className="rounded-md bg-muted/50 p-3 flex items-start gap-3"><UserCheck className="h-4 w-4 text-muted-foreground mt-0.5" /><div className="space-y-1"><p className="text-sm font-medium">Receipt Acknowledged</p><p className="text-xs text-muted-foreground">By {movement.receivedBy} on {format(toDate(movement.receivedAt)!, 'PPP')}</p></div></div>)}
+        </div>
+    );
+};
