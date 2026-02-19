@@ -81,7 +81,7 @@ export const getFiles = async (): Promise<CorrespondenceFile[]> => {
 
 export const createFile = async (fileData: any): Promise<{ file?: CorrespondenceFile, error?: string }> => {
     const filesCollection = getFileCollectionRef();
-    const q = filesCollection.where('fileNumber', '==', fileData.fileNumber);
+    const q = filesCollection.where('fileNumber', '==', fileData.fileNumber.trim());
     const existing = await q.get();
     if (!existing.empty) {
         return { error: `File number ${fileData.fileNumber} already exists.` };
@@ -90,6 +90,7 @@ export const createFile = async (fileData: any): Promise<{ file?: Correspondence
     const createdDate = new Date(fileData.dateCreated);
     const newFile: Omit<CorrespondenceFile, 'id'> = {
         ...fileData,
+        fileNumber: fileData.fileNumber.trim(),
         dateCreated: createdDate,
         reportableDate: createdDate,
         lastActivityAt: FieldValue.serverTimestamp(),
@@ -101,6 +102,7 @@ export const createFile = async (fileData: any): Promise<{ file?: Correspondence
         requests: [],
         milestones: defaultMilestones,
         attachments: [],
+        group: fileData.group?.trim() || 'no group yet',
         coAssignees: Array.isArray(fileData.coAssignees) ? fileData.coAssignees : (fileData.coAssignees?.split(',').filter(Boolean) || []),
         isJudgmentDebt: fileData.isJudgmentDebt === 'on' || fileData.isJudgmentDebt === true,
         amountGHC: fileData.amountGHC ? parseFloat(fileData.amountGHC) : 0,
@@ -120,6 +122,7 @@ export const updateFile = async (fileData: any): Promise<{ file?: Correspondence
     const updateData: any = { 
         ...fileData, 
         lastActivityAt: FieldValue.serverTimestamp(),
+        group: fileData.group?.trim() || oldData.group || 'no group yet',
         coAssignees: Array.isArray(fileData.coAssignees) ? fileData.coAssignees : (fileData.coAssignees?.split(',').filter(Boolean) || []),
         isJudgmentDebt: fileData.isJudgmentDebt === 'on' || fileData.isJudgmentDebt === true,
         amountGHC: fileData.amountGHC ? parseFloat(fileData.amountGHC) : 0,
@@ -130,19 +133,18 @@ export const updateFile = async (fileData: any): Promise<{ file?: Correspondence
     if (fileData.treatAsNew === 'on') updateData.reportableDate = new Date();
     
     const hasAssigneeChanged = fileData.assignedTo && oldData.assignedTo !== fileData.assignedTo;
-    const hasGroupChanged = fileData.group && oldData.group !== fileData.group;
-
-    if (hasAssigneeChanged || hasGroupChanged) {
+    
+    if (hasAssigneeChanged) {
         const newMovement: Movement = {
             id: `M-AUTO-${Date.now()}`,
             date: new Date(),
-            movedTo: fileData.assignedTo || oldData.assignedTo || 'Unassigned',
-            status: `Reassigned to ${fileData.group || oldData.group || 'New Group'}`,
+            movedTo: fileData.assignedTo.trim(),
+            status: `Reassigned to Lead Practitioner`,
         };
         updateData.movements = FieldValue.arrayUnion(newMovement);
         
         const currentRequests = oldData.requests || [];
-        updateData.requests = currentRequests.filter((r: any) => r.requesterName !== (fileData.assignedTo || ''));
+        updateData.requests = currentRequests.filter((r: any) => r.requesterName.trim().toLowerCase() !== fileData.assignedTo.trim().toLowerCase());
     }
 
     delete updateData.id;
@@ -231,22 +233,22 @@ export const addCorrespondence = async (data: any): Promise<{ file?: Corresponde
     const newLetter: any = {
         date: new Date(data.date),
         type: data.type,
-        subject: data.subject,
-        recipient: data.recipient,
-        documentNo: data.documentNo || '',
-        remarks: data.remarks || '',
-        ...(data.suitNumber && { suitNumber: data.suitNumber }),
-        ...(data.fileNumber && { fileNumber: data.fileNumber }),
+        subject: data.subject.trim(),
+        recipient: data.recipient.trim(),
+        documentNo: data.documentNo?.trim() || '',
+        remarks: data.remarks?.trim() || '',
+        ...(data.suitNumber && { suitNumber: data.suitNumber.trim() }),
+        ...(data.fileNumber && { fileNumber: data.fileNumber.trim() }),
         ...(data.dateOnLetter && { dateOnLetter: new Date(data.dateOnLetter) }),
         ...(data.hearingDate && { hearingDate: new Date(data.hearingDate) }),
-        ...(data.signedBy && { signedBy: data.signedBy }),
-        ...(data.processType && { processType: data.processType }),
-        ...(data.serviceAddress && { serviceAddress: data.serviceAddress }),
-        ...(data.scanUrl && { scanUrl: data.scanUrl }),
+        ...(data.signedBy && { signedBy: data.signedBy.trim() }),
+        ...(data.processType && { processType: data.processType.trim() }),
+        ...(data.serviceAddress && { serviceAddress: data.serviceAddress.trim() }),
+        ...(data.scanUrl && { scanUrl: data.scanUrl.trim() }),
     };
 
     if (data.fileNumber) {
-        const snapshot = await getFileCollectionRef().where('fileNumber', '==', data.fileNumber).get();
+        const snapshot = await getFileCollectionRef().where('fileNumber', '==', data.fileNumber.trim()).get();
         if (snapshot.empty) return { error: `File number ${data.fileNumber} not found.` };
 
         const fileDoc = snapshot.docs[0];
@@ -282,12 +284,12 @@ export const assignToFile = async (data: any) => {
     if (!letterSnap.exists) throw new Error("Letter not found.");
     
     const letterData = letterSnap.data()!;
-    const fileSnap = await getFileCollectionRef().where('fileNumber', '==', data.fileNumber).get();
+    const fileSnap = await getFileCollectionRef().where('fileNumber', '==', data.fileNumber.trim()).get();
     if (fileSnap.empty) throw new Error("File not found.");
     
     const fileDoc = fileSnap.docs[0];
     await fileDoc.ref.update({
-        letters: FieldValue.arrayUnion({ id: data.letterId, ...letterData, fileNumber: data.fileNumber }),
+        letters: FieldValue.arrayUnion({ id: data.letterId, ...letterData, fileNumber: data.fileNumber.trim() }),
         lastActivityAt: FieldValue.serverTimestamp()
     });
     await letterRef.delete();
@@ -295,7 +297,7 @@ export const assignToFile = async (data: any) => {
 };
 
 export const unassignFromFile = async (data: any) => {
-    const fileSnap = await getFileCollectionRef().where('fileNumber', '==', data.fileNumber).get();
+    const fileSnap = await getFileCollectionRef().where('fileNumber', '==', data.fileNumber.trim()).get();
     if (fileSnap.empty) throw new Error("File not found.");
     
     const fileDoc = fileSnap.docs[0];
@@ -313,7 +315,7 @@ export const unassignFromFile = async (data: any) => {
 };
 
 export const updateLetterInFile = async (fileNumber: string, letterId: string, data: any) => {
-    const fileSnap = await getFileCollectionRef().where('fileNumber', '==', fileNumber).get();
+    const fileSnap = await getFileCollectionRef().where('fileNumber', '==', fileNumber.trim()).get();
     if (fileSnap.empty) throw new Error("File not found.");
     const fileDoc = fileSnap.docs[0];
     const letters = (fileDoc.data()!.letters || []).map((l: any) => {
@@ -325,7 +327,7 @@ export const updateLetterInFile = async (fileNumber: string, letterId: string, d
 };
 
 export const deleteLetterFromFile = async (fileNumber: string, letterId: string) => {
-    const fileSnap = await getFileCollectionRef().where('fileNumber', '==', fileNumber).get();
+    const fileSnap = await getFileCollectionRef().where('fileNumber', '==', fileNumber.trim()).get();
     if (fileSnap.empty) throw new Error("File not found.");
     const fileDoc = fileSnap.docs[0];
     const letters = (fileDoc.data()!.letters || []).filter((l: any) => l.id !== letterId);
@@ -334,27 +336,27 @@ export const deleteLetterFromFile = async (fileNumber: string, letterId: string)
 };
 
 export const moveFile = async (data: any): Promise<{ file?: CorrespondenceFile, error?: string }> => {
-    const q = getFileCollectionRef().where('fileNumber', '==', data.fileNumber);
+    const q = getFileCollectionRef().where('fileNumber', '==', data.fileNumber.trim());
     const fileSnapshot = await q.get();
     if (fileSnapshot.empty) return { error: `File number ${data.fileNumber} not found.` };
     
     const fileDoc = fileSnapshot.docs[0];
     const fileData = fileDoc.data()!;
     
-    // Resolve group of the recipient resiliently
+    // Resolve group of the recipient resiliently from the Registry
     let resolvedGroup = 'no group yet';
     const attorneySnap = await getAttorneyCollectionRef().get();
     const attorneys = attorneySnap.docs.map(d => docToType<Attorney>(d));
     const targetAttorney = attorneys.find(a => a.fullName.trim().toLowerCase() === data.movedTo.trim().toLowerCase());
     if (targetAttorney) {
-        resolvedGroup = targetAttorney.group || 'no group yet';
+        resolvedGroup = targetAttorney.group?.trim() || 'no group yet';
     }
 
     const newMovement: Movement = {
         id: `M-${Date.now()}`,
         date: new Date(data.date),
-        movedTo: data.movedTo,
-        status: data.status,
+        movedTo: data.movedTo.trim(),
+        status: data.status.trim(),
     };
     
     const updatedRequests = (fileData.requests || []).filter((r: any) => r.requesterName.toLowerCase().trim() !== data.movedTo.toLowerCase().trim());
@@ -373,17 +375,15 @@ export const batchMoveFiles = async (data: any) => {
     const firestore = getFirestore(initializeAdmin());
     const batch = firestore.batch();
     
-    // Resolve group of the recipient
-    let resolvedGroup = 'no group yet';
     const attorneySnap = await getAttorneyCollectionRef().get();
     const attorneys = attorneySnap.docs.map(d => docToType<Attorney>(d));
+    
+    // Predetermine group if possible for specific movements
     const targetAttorney = attorneys.find(a => a.fullName.trim().toLowerCase() === data.movedTo.trim().toLowerCase());
-    if (targetAttorney) {
-        resolvedGroup = targetAttorney.group || 'no group yet';
-    }
+    const recipientGroup = targetAttorney?.group?.trim() || 'no group yet';
 
     for (const fileNum of data.fileNumbers) {
-        const snap = await getFileCollectionRef().where('fileNumber', '==', fileNum).get();
+        const snap = await getFileCollectionRef().where('fileNumber', '==', fileNum.trim()).get();
         if (!snap.empty) {
             const doc = snap.docs[0];
             const fileData = doc.data();
@@ -392,18 +392,18 @@ export const batchMoveFiles = async (data: any) => {
             const newMovement: Movement = {
                 id: `M-${Date.now()}-${Math.random().toString(36).substring(2,5)}`,
                 date: new Date(data.date),
-                movedTo: data.movedTo,
-                status: data.status,
+                movedTo: data.movedTo.trim(),
+                status: data.status.trim(),
             };
 
             const updatePayload: any = {
                 movements: FieldValue.arrayUnion(newMovement),
                 requests: updatedRequests,
-                group: data.group || resolvedGroup,
+                group: data.group || recipientGroup,
                 lastActivityAt: FieldValue.serverTimestamp()
             };
 
-            if (data.assignedTo) updatePayload.assignedTo = data.assignedTo;
+            if (data.assignedTo) updatePayload.assignedTo = data.assignedTo.trim();
 
             batch.update(doc.ref, updatePayload);
         }
@@ -423,7 +423,7 @@ export const batchPickupFiles = async (fileNumbers: string[], receivedBy: string
     const attorneys = attorneySnap.docs.map(doc => docToType<Attorney>(doc));
 
     for (const fileNum of fileNumbers) {
-        const snap = await getFileCollectionRef().where('fileNumber', '==', fileNum).limit(1).get();
+        const snap = await getFileCollectionRef().where('fileNumber', '==', fileNum.trim()).limit(1).get();
         if (!snap.empty) {
             const doc = snap.docs[0];
             const fileData = doc.data();
@@ -453,7 +453,7 @@ export const batchPickupFiles = async (fileNumbers: string[], receivedBy: string
                 movedTo: 'Registry',
                 status: 'Physically returned to Registry',
                 receivedAt: now,
-                receivedBy: receivedBy
+                receivedBy: receivedBy.trim()
             };
 
             batch.update(doc.ref, {
@@ -469,7 +469,7 @@ export const batchPickupFiles = async (fileNumbers: string[], receivedBy: string
 };
 
 export const updateMovementInFile = async (fileNumber: string, movementId: string, data: any) => {
-    const snap = await getFileCollectionRef().where('fileNumber', '==', fileNumber).get();
+    const snap = await getFileCollectionRef().where('fileNumber', '==', fileNumber.trim()).get();
     if (snap.empty) throw new Error("File not found.");
     const doc = snap.docs[0];
     const movements = (doc.data()!.movements || []).map((m: any) => {
@@ -481,7 +481,7 @@ export const updateMovementInFile = async (fileNumber: string, movementId: strin
 };
 
 export const deleteMovementFromFile = async (fileNumber: string, movementId: string) => {
-    const snap = await getFileCollectionRef().where('fileNumber', '==', fileNumber).get();
+    const snap = await getFileCollectionRef().where('fileNumber', '==', fileNumber.trim()).get();
     if (snap.empty) throw new Error("File not found.");
     const doc = snap.docs[0];
     const movements = (doc.data()!.movements || []).filter((m: any) => m.id !== movementId);
@@ -490,11 +490,11 @@ export const deleteMovementFromFile = async (fileNumber: string, movementId: str
 };
 
 export const confirmFileReceipt = async (fileNumber: string, movementId: string, receivedBy: string) => {
-    const snap = await getFileCollectionRef().where('fileNumber', '==', fileNumber).get();
+    const snap = await getFileCollectionRef().where('fileNumber', '==', fileNumber.trim()).get();
     if (snap.empty) throw new Error("File not found.");
     const doc = snap.docs[0];
     const movements = (doc.data()!.movements || []).map((m: any) => {
-        if (m.id === movementId) return { ...m, receivedAt: new Date(), receivedBy };
+        if (m.id === movementId) return { ...m, receivedAt: new Date(), receivedBy: receivedBy.trim() };
         return m;
     });
     await doc.ref.update({ movements, lastActivityAt: FieldValue.serverTimestamp() });
@@ -530,14 +530,14 @@ export const deleteCensusRecord = async (id: string) => {
 };
 
 export const addInternalDraft = async (fileNumber: string, data: any) => {
-    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber);
+    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber.trim());
     const snapshot = await q.get();
     if (snapshot.empty) throw new Error('File not found.');
     
     const now = new Date();
     const draft: InternalDraft = {
         id: `D-${Date.now()}`,
-        title: data.title,
+        title: data.title.trim(),
         type: data.type,
         content: data.content,
         date: now,
@@ -551,7 +551,7 @@ export const addInternalDraft = async (fileNumber: string, data: any) => {
 };
 
 export const updateInternalDraft = async (fileNumber: string, draftId: string, data: any) => {
-    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber);
+    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber.trim());
     const snapshot = await q.get();
     if (snapshot.empty) throw new Error('File not found.');
     
@@ -561,7 +561,7 @@ export const updateInternalDraft = async (fileNumber: string, draftId: string, d
         if (d.id === draftId) {
             return { 
                 ...d, 
-                title: data.title || d.title, 
+                title: data.title?.trim() || d.title, 
                 content: data.content || d.content 
             };
         }
@@ -576,7 +576,7 @@ export const updateInternalDraft = async (fileNumber: string, draftId: string, d
 };
 
 export const deleteInternalDraft = async (fileNumber: string, draftId: string) => {
-    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber);
+    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber.trim());
     const snapshot = await q.get();
     if (snapshot.empty) throw new Error('File not found.');
     
@@ -592,16 +592,16 @@ export const deleteInternalDraft = async (fileNumber: string, draftId: string) =
 };
 
 export const addInternalInstruction = async (fileNumber: string, data: any) => {
-    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber);
+    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber.trim());
     const snapshot = await q.get();
     if (snapshot.empty) throw new Error('File not found.');
     
     const now = new Date();
     const instruction: InternalInstruction = {
         id: `I-${Date.now()}`,
-        text: data.text,
-        from: data.from,
-        to: data.to,
+        text: data.text.trim(),
+        from: data.from.trim(),
+        to: data.to.trim(),
         date: now,
     };
     
@@ -613,13 +613,13 @@ export const addInternalInstruction = async (fileNumber: string, data: any) => {
 };
 
 export const addCaseReminder = async (fileNumber: string, data: any) => {
-    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber);
+    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber.trim());
     const snapshot = await q.get();
     if (snapshot.empty) throw new Error('File not found.');
     
     const reminder: CaseReminder = {
         id: `R-${Date.now()}`,
-        text: data.text,
+        text: data.text.trim(),
         date: new Date(data.date),
         isCompleted: false,
     };
@@ -632,7 +632,7 @@ export const addCaseReminder = async (fileNumber: string, data: any) => {
 };
 
 export const toggleReminder = async (fileNumber: string, reminderId: string) => {
-    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber);
+    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber.trim());
     const snapshot = await q.get();
     if (snapshot.empty) return;
     
@@ -650,11 +650,11 @@ export const toggleReminder = async (fileNumber: string, reminderId: string) => 
 
 export const addGeneralReminder = async (attorneyId: string, attorneyName: string, data: any) => {
     await getRemindersCollectionRef().add({
-        text: data.text,
+        text: data.text.trim(),
         date: new Date(data.date),
         isCompleted: false,
         attorneyId,
-        attorneyName,
+        attorneyName: attorneyName.trim(),
         createdAt: FieldValue.serverTimestamp()
     });
     return { success: true };
@@ -668,7 +668,7 @@ export const toggleGeneralReminder = async (reminderId: string) => {
 };
 
 export const requestFile = async (fileNumber: string, attorneyId: string, attorneyName: string) => {
-    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber);
+    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber.trim());
     const snapshot = await q.get();
     if (snapshot.empty) throw new Error('File not found.');
     
@@ -676,7 +676,7 @@ export const requestFile = async (fileNumber: string, attorneyId: string, attorn
     const request: FileRequest = {
         id: `REQ-${Date.now()}`,
         requesterId: attorneyId,
-        requesterName: attorneyName,
+        requesterName: attorneyName.trim(),
         requestedAt: now,
     };
     
@@ -688,7 +688,7 @@ export const requestFile = async (fileNumber: string, attorneyId: string, attorn
 };
 
 export const cancelFileRequest = async (fileNumber: string, requestId: string) => {
-    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber);
+    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber.trim());
     const snapshot = await q.get();
     if (snapshot.empty) return;
     
@@ -703,7 +703,7 @@ export const cancelFileRequest = async (fileNumber: string, requestId: string) =
 };
 
 export const updateFileMilestones = async (fileNumber: string, milestones: Milestone[]) => {
-    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber);
+    const q = getFileCollectionRef().where('fileNumber', '==', fileNumber.trim());
     const snapshot = await q.get();
     if (snapshot.empty) throw new Error('File not found.');
     
@@ -719,7 +719,7 @@ export const createAttorney = async (data: any) => {
     const docRef = await getAttorneyCollectionRef().add({
         ...data,
         fullName: data.fullName.trim(),
-        group: data.group ? data.group.trim() : 'no group yet',
+        group: data.group?.trim() || 'no group yet',
         accessId,
     });
     return { id: docRef.id, accessId };
@@ -735,7 +735,7 @@ export const updateAttorney = async (id: string, data: any) => {
     await getAttorneyCollectionRef().doc(id).update({
         ...data,
         fullName: data.fullName.trim(),
-        group: data.group ? data.group.trim() : 'no group yet'
+        group: data.group?.trim() || 'no group yet'
     });
 };
 
@@ -745,19 +745,19 @@ export const propagateAttorneyGroupChange = async (attorneyName: string, newGrou
     
     const filesSnapshot = await getFileCollectionRef().get();
 
-    const normalizedName = attorneyName.toLowerCase().trim();
+    const normalizedName = attorneyName.trim().toLowerCase();
     const resolvedGroup = newGroup?.trim() || 'no group yet';
 
     filesSnapshot.docs.forEach(doc => {
         const data = doc.data();
         let shouldUpdate = false;
 
-        // 1. Check Lead Assignee
-        if (data.assignedTo?.toLowerCase().trim() === normalizedName) {
+        // 1. Check Lead Assignee (normalized match)
+        if (data.assignedTo?.trim().toLowerCase() === normalizedName) {
             shouldUpdate = true;
         }
 
-        // 2. Check Physical Holder (for Miscellaneous files)
+        // 2. Check Physical Holder (normalized match from latest movement)
         const movements = data.movements || [];
         if (movements.length > 0) {
             const sortedMovements = [...movements].sort((a,b) => {
@@ -767,12 +767,13 @@ export const propagateAttorneyGroupChange = async (attorneyName: string, newGrou
                 return b.id.localeCompare(a.id);
             });
             const latest = sortedMovements[0];
-            if (latest?.movedTo?.toLowerCase().trim() === normalizedName) {
+            if (latest?.movedTo?.trim().toLowerCase() === normalizedName) {
                 shouldUpdate = true;
             }
         }
 
-        if (shouldUpdate && data.group !== resolvedGroup) {
+        // Apply update if assigned/held AND group is out of sync
+        if (shouldUpdate && (data.group || 'no group yet').trim().toLowerCase() !== resolvedGroup.toLowerCase()) {
             batch.update(doc.ref, { 
                 group: resolvedGroup,
                 lastActivityAt: FieldValue.serverTimestamp() 
@@ -789,7 +790,7 @@ export const propagateAttorneyNameChange = async (oldName: string, newName: stri
     const censusSnapshot = await getCensusCollectionRef().where('attorney', '==', oldName.trim()).get();
     const batch = firestore.batch();
     
-    const normalizedOld = oldName.toLowerCase().trim();
+    const normalizedOld = oldName.trim().toLowerCase();
     const trimmedNew = newName.trim();
 
     censusSnapshot.docs.forEach(doc => {
@@ -801,14 +802,14 @@ export const propagateAttorneyNameChange = async (oldName: string, newName: stri
         let changed = false;
         const updates: any = {};
 
-        if (data.assignedTo?.toLowerCase().trim() === normalizedOld) {
+        if (data.assignedTo?.trim().toLowerCase() === normalizedOld) {
             updates.assignedTo = trimmedNew;
             changed = true;
         }
 
         if (data.coAssignees) {
             const newCo = data.coAssignees.map((name: string) => 
-                name.toLowerCase().trim() === normalizedOld ? trimmedNew : name
+                name.trim().toLowerCase() === normalizedOld ? trimmedNew : name
             );
             if (JSON.stringify(newCo) !== JSON.stringify(data.coAssignees)) {
                 updates.coAssignees = newCo;
@@ -819,8 +820,8 @@ export const propagateAttorneyNameChange = async (oldName: string, newName: stri
         if (data.movements) {
             const newMovements = data.movements.map((m: any) => {
                 let mChanged = false;
-                if (m.movedTo?.toLowerCase().trim() === normalizedOld) { m.movedTo = trimmedNew; mChanged = true; }
-                if (m.receivedBy?.toLowerCase().trim() === normalizedOld) { m.receivedBy = trimmedNew; mChanged = true; }
+                if (m.movedTo?.trim().toLowerCase() === normalizedOld) { m.movedTo = trimmedNew; mChanged = true; }
+                if (m.receivedBy?.trim().toLowerCase() === normalizedOld) { m.receivedBy = trimmedNew; mChanged = true; }
                 if (mChanged) changed = true;
                 return m;
             });
@@ -830,11 +831,11 @@ export const propagateAttorneyNameChange = async (oldName: string, newName: stri
         if (data.internalInstructions) {
             const newInstructions = data.internalInstructions.map((i: any) => {
                 let iChanged = false;
-                if (i.from?.toLowerCase().trim() === normalizedOld || i.from?.toLowerCase().includes(`(${normalizedOld})`)) { 
-                    i.from = i.from.replace(oldName, trimmedNew); 
+                if (i.from?.trim().toLowerCase() === normalizedOld || i.from?.toLowerCase().includes(`(${normalizedOld})`)) { 
+                    i.from = i.from.replace(new RegExp(oldName.trim(), 'gi'), trimmedNew); 
                     iChanged = true; 
                 }
-                if (i.to?.toLowerCase().trim() === normalizedOld) { i.to = trimmedNew; iChanged = true; }
+                if (i.to?.trim().toLowerCase() === normalizedOld) { i.to = trimmedNew; iChanged = true; }
                 if (iChanged) changed = true;
                 return i;
             });
@@ -843,7 +844,7 @@ export const propagateAttorneyNameChange = async (oldName: string, newName: stri
 
         if (data.requests) {
             const newRequests = data.requests.map((r: any) => {
-                if (r.requesterName?.toLowerCase().trim() === normalizedOld) {
+                if (r.requesterName?.trim().toLowerCase() === normalizedOld) {
                     changed = true;
                     return { ...r, requesterName: trimmedNew };
                 }
