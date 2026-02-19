@@ -174,7 +174,7 @@ export function Dashboard({
         if (targetAttorney?.phoneNumber) {
             const truncatedSubject = truncate(file.subject, 60);
             const message = encodeURIComponent(
-                `Hello ${targetAttorney.fullName},\n\nThe following file(s) have been delivered to your desk and confirmed received in the system:\n\n• ${file.fileNumber} - ${truncatedSubject}\n\nPlease verify physical receipt.\n\nThank you.`
+                `Hello ${targetAttorney.fullName},\n\nThe following file(s) have been delivered to your desk and confirmed received in the CDR_File Tracker system:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease verify physical receipt.\n\nThank you.`
             );
             window.open(`https://wa.me/${targetAttorney.phoneNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
         }
@@ -197,11 +197,11 @@ export function Dashboard({
     const truncatedSubject = truncate(reminder.subject || '', 60);
 
     const fileDisplay = reminder.fileNumber === 'General'
-        ? 'General Activity'
-        : `${reminder.fileNumber} (${truncatedSubject})`;
+        ? '*General Activity*'
+        : `*${reminder.fileNumber}* (${truncatedSubject})`;
 
     const message = encodeURIComponent(
-        `Hello ${attorney.fullName},\n\nThis is an automated reminder from the File Tracker system regarding this file/activity below:\n\n• File: ${fileDisplay}\n• Task: ${reminder.text}\n• Due Date: ${dateStr}\n\nPlease take the necessary action.\n\nThank you.`
+        `Hello ${attorney.fullName},\n\nThis is an automated reminder from the CDR_File Tracker system regarding this file/activity below:\n\n• File: ${fileDisplay}\n• Task: ${reminder.text}\n• Due Date: ${dateStr}\n\nPlease take the necessary action.\n\nThank you.`
     );
     
     window.open(`https://wa.me/${attorney.phoneNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
@@ -232,7 +232,7 @@ export function Dashboard({
         const result = await authConfirmReceipt(formData);
         if (result && result.message?.includes('Success')) {
             successCount++;
-            confirmedFilesInfo.push(`• ${file.fileNumber} - ${truncate(file.subject, 60)}`);
+            confirmedFilesInfo.push(`• *${file.fileNumber}* - ${truncate(file.subject, 60)}`);
         }
     }
     
@@ -241,7 +241,7 @@ export function Dashboard({
         const targetAttorney = attorneys?.find(a => a.fullName.toLowerCase() === destination.toLowerCase());
         if (targetAttorney?.phoneNumber) {
             const message = encodeURIComponent(
-                `Hello ${targetAttorney.fullName},\n\nThe following file(s) have been delivered to your desk and confirmed received in the system:\n\n${confirmedFilesInfo.join('\n')}\n\nPlease verify physical receipt.\n\nThank you.`
+                `Hello ${targetAttorney.fullName},\n\nThe following file(s) have been delivered to your desk and confirmed received in the CDR_File Tracker system:\n\n${confirmedFilesInfo.join('\n')}\n\nPlease verify physical receipt.\n\nThank you.`
             );
             window.open(`https://wa.me/${targetAttorney.phoneNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
         }

@@ -53,9 +53,9 @@ export function BatchPickupDialog({ isOpen, onOpenChange, fileNumbers }: BatchPi
     };
 
     const handleSendWhatsApp = (attorney: any) => {
-        const fileList = attorney.files.map((f: any, i: number) => `${i + 1}. ${f.fileNumber} - ${truncate(f.subject, 60)}`).join('\n');
+        const fileList = attorney.files.map((f: any, i: number) => `${i + 1}. *${f.fileNumber}* - ${truncate(f.subject, 60)}`).join('\n');
         const message = encodeURIComponent(
-            `Hello ${attorney.fullName},\n\nThe Registry has physically picked up the following ${attorney.files.length} file(s) from your office:\n\n${fileList}\n\nThese have been marked as 'Received' by the Registry in the tracking system. Please verify physical transfer.\n\nThank you.`
+            `Hello ${attorney.fullName},\n\nThe Registry has physically picked up the following ${attorney.files.length} file(s) from your office:\n\n${fileList}\n\nThese have been marked as 'Received' by the Registry in the CDR_File Tracker system. Please verify physical transfer.\n\nThank you.`
         );
         window.open(`https://wa.me/${attorney.phoneNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
         
@@ -124,7 +124,7 @@ export function BatchPickupDialog({ isOpen, onOpenChange, fileNumbers }: BatchPi
                                     <div className="space-y-1.5 pl-9">
                                         {att.files.map((f: any) => (
                                             <div key={f.fileNumber} className="flex items-start gap-2 text-xs">
-                                                <Badge variant="outline" className="font-mono h-4 px-1 py-0 text-[10px]">{f.fileNumber}</Badge>
+                                                <Badge variant="outline" className="font-mono h-4 px-1 py-0 text-[10px]">*{f.fileNumber}*</Badge>
                                                 <span className="text-muted-foreground truncate">{f.subject}</span>
                                             </div>
                                         ))}

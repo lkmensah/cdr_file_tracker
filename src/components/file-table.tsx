@@ -171,7 +171,7 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
             if (targetAttorney?.phoneNumber) {
                 const truncatedSubject = truncate(file.subject, 60);
                 const message = encodeURIComponent(
-                    `Hello ${targetAttorney.fullName},\n\nThe following file(s) have been delivered to your desk and confirmed received in the system:\n\n• ${file.fileNumber} - ${truncatedSubject}\n\nPlease verify physical receipt.\n\nThank you.`
+                    `Hello ${targetAttorney.fullName},\n\nThe following file(s) have been delivered to your desk and confirmed received in the CDR_File Tracker system:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease verify physical receipt.\n\nThank you.`
                 );
                 window.open(`https://wa.me/${targetAttorney.phoneNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
             }
