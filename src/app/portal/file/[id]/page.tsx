@@ -82,7 +82,7 @@ import {
     AccordionContent,
     AccordionItem,
     AccordionTrigger,
-} from "@/components/accordion";
+} from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combobox } from '@/components/ui/combobox';
 import { refineDraft } from '@/ai/flows/refine-draft';
@@ -389,12 +389,12 @@ export default function PortalFileDetail() {
                           captionLayout="dropdown-buttons"
                           fromYear={1950}
                           toYear={2035}
-                        /></PopoverContent></Popover><div className="flex gap-2 w-full sm:w-auto"><Input type="time" value={selectedTime} onChange={(e) => setSelectedTime(value => value)} className="h-8 text-[10px] flex-1 sm:w-20 px-1" /><Button size="sm" className="h-8 w-8 p-0 shrink-0" onClick={handleAddReminder} disabled={isSubmitting || !selectedDate || !reminderText}><Plus className="h-3 w-3" /></Button></div></div></div>)}<Separator /><div className="space-y-2">{ (file.reminders || []).filter(r => !r.isCompleted).length > 0 ? (file.reminders || []).filter(r => !r.isCompleted).map(r => (<div key={r.id} className="flex items-start gap-2 bg-muted/50 p-2 rounded-md">{!isCompleted && !isHistoricalOnly && (<Button variant="ghost" size="icon" className="h-4 w-4 mt-0.5 shrink-0" onClick={() => authToggleReminder(file.fileNumber, r.id)}><div className="h-3 w-3 rounded border border-muted-foreground" /></Button>)}<div className="flex-1 min-w-0"><p className="text-[11px] leading-tight font-medium truncate">{r.text}</p><p className="text-[9px] text-primary font-bold mt-0.5">{toDate(r.date) ? format(toDate(r.date)!, 'MMM d, p') : 'N/A'}</p></div></div>)) : (<p className="text-[10px] text-muted-foreground text-center italic py-2">No active reminders.</p>) }</div></CardContent></Card>)}
+                        /></PopoverContent></Popover><div className="flex gap-2 w-full sm:w-auto"><Input type="time" value={selectedTime} onChange={(e) => setSelectedTime(e.target.value)} className="h-8 text-[10px] flex-1 sm:w-20 px-1" /><Button size="sm" className="h-8 w-8 p-0 shrink-0" onClick={handleAddReminder} disabled={isSubmitting || !selectedDate || !reminderText}><Plus className="h-3 w-3" /></Button></div></div></div>)}<Separator /><div className="space-y-2">{ (file.reminders || []).filter(r => !r.isCompleted).length > 0 ? (file.reminders || []).filter(r => !r.isCompleted).map(r => (<div key={r.id} className="flex items-start gap-2 bg-muted/50 p-2 rounded-md">{!isCompleted && !isHistoricalOnly && (<Button variant="ghost" size="icon" className="h-4 w-4 mt-0.5 shrink-0" onClick={() => authToggleReminder(file.fileNumber, r.id)}><div className="h-3 w-3 rounded border border-muted-foreground" /></Button>)}<div className="flex-1 min-w-0"><p className="text-[11px] leading-tight font-medium truncate">{r.text}</p><p className="text-[9px] text-primary font-bold mt-0.5">{toDate(r.date) ? format(toDate(r.date)!, 'MMM d, p') : 'N/A'}</p></div></div>)) : (<p className="text-[10px] text-muted-foreground text-center italic py-2">No active reminders.</p>) }</div></CardContent></Card>)}
                     </div>
 
                     <div className="lg:col-span-2 space-y-6">
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                            <div className="overflow-x-auto pb-2"><TabsList className="flex w-fit sm:grid sm:w-full grid-cols-5 min-w-[500px]"><TabsTrigger value="folios" className="text-[10px] sm:text-xs"><HistoryIcon className="h-3 w-3 mr-1.5" /> Folios</TabsTrigger><TabsTrigger value="attachments" className="text-[10px] sm:text-xs"><Paperclip className="h-3 w-3 mr-1.5" /> Files</TabsTrigger><TabsTrigger value="communications" className="text-[10px] sm:text-xs"><MessageSquare className="h-3 w-3 mr-1.5" /> Messaging</TabsTrigger><TabsTrigger value="drafts" className="text-[10px] sm:text-xs"><FileTextIcon className="h-3 w-3 mr-1.5" /> Drafts</TabsTrigger><TabsTrigger value="new-draft" className="text-[10px] sm:text-xs" disabled={!canInteract}>{editingDraftId ? <Pencil className="h-3 w-3 mr-1.5" /> : <Plus className="h-3 w-3 mr-1.5" />}{editingDraftId ? 'Edit Draft' : 'New Draft'}</TabsTrigger></TabsList></div>
+                            <div className="overflow-x-auto pb-2"><TabsList className="flex w-fit sm:grid sm:w-full grid-cols-5 min-w-[500px]"><TabsTrigger value="folios" className="text-[10px] sm:text-xs"><FileTextIcon className="h-3 w-3 mr-1.5" /> Folios</TabsTrigger><TabsTrigger value="attachments" className="text-[10px] sm:text-xs"><Paperclip className="h-3 w-3 mr-1.5" /> Files</TabsTrigger><TabsTrigger value="communications" className="text-[10px] sm:text-xs"><MessageSquare className="h-3 w-3 mr-1.5" /> Messaging</TabsTrigger><TabsTrigger value="drafts" className="text-[10px] sm:text-xs"><FileTextIcon className="h-3 w-3 mr-1.5" /> Drafts</TabsTrigger><TabsTrigger value="new-draft" className="text-[10px] sm:text-xs" disabled={!canInteract}>{editingDraftId ? <Pencil className="h-3 w-3 mr-1.5" /> : <Plus className="h-3 w-3 mr-1.5" />}{editingDraftId ? 'Edit Draft' : 'New Draft'}</TabsTrigger></TabsList></div>
                             <TabsContent value="folios" className="space-y-4">
                                 {[...(file?.letters || [])].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0)).map((letter, i, arr) => (
                                     <Card key={letter.id} className="shadow-sm"><CardHeader className="py-3 flex flex-row items-center justify-between border-b bg-muted/30"><Badge variant="outline" className="text-[9px] uppercase font-bold tracking-widest">{letter.type}</Badge><div className="flex items-center gap-2">{letter.scanUrl && (<Button variant="ghost" size="sm" className="h-7 gap-1.5 text-[10px] text-primary font-bold hover:bg-primary/10" onClick={() => window.open(letter.scanUrl, '_blank')}><Eye className="h-3 w-3" />View Scan</Button>)}<span className="text-[10px] text-muted-foreground">{toDate(letter.date) ? format(toDate(letter.date)!, 'PPP') : 'N/A'}</span></div></CardHeader><CardContent className="py-4 space-y-2"><h4 className="font-semibold text-sm">{letter.subject}</h4><div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs"><div><Label className="text-[9px] text-muted-foreground uppercase">Source/Registry</Label><p className="truncate">{letter.recipient}</p></div><div><Label className="text-[9px] text-muted-foreground uppercase">Doc No.</Label><p className="truncate">{letter.documentNo || 'N/A'}</p></div></div>{letter.remarks && (<div className="mt-2 p-2 bg-muted/20 rounded border-l-2 italic text-xs">{letter.remarks}</div>)}</CardContent></Card>
@@ -427,7 +427,7 @@ export default function PortalFileDetail() {
 function HistoryIcon(props: any) { return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg> }
 function FileTextIcon(props: any) { return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg> }
 
-const LetterDetails = ({ letter, index, total, fileNumber, onDataChange }: { letter: Letter, index: number, total: number, fileNumber: string, onDataChange: () => void }) => {
+function LetterDetails({ letter, index, total, fileNumber, onDataChange }: { letter: Letter, index: number, total: number, fileNumber: string, onDataChange: () => void }) {
     return (
         <div className="space-y-4">
             <div className="flex justify-between items-center">
@@ -443,9 +443,9 @@ const LetterDetails = ({ letter, index, total, fileNumber, onDataChange }: { let
             {letter.remarks && (<div><h4 className="text-xs font-semibold text-muted-foreground">Remarks</h4><p className="text-sm italic">"{letter.remarks}"</p></div>)}
         </div>
     )
-};
+}
 
-const MovementDetails = ({ movement, index, total, fileNumber, fileSubject, isLatest, onDataChange }: { movement: Movement, index: number, total: number, fileNumber: string, fileSubject: string, isLatest: boolean, onDataChange: () => void }) => {
+function MovementDetails({ movement, index, total, fileNumber, fileSubject, isLatest, onDataChange }: { movement: Movement, index: number, total: number, fileNumber: string, fileSubject: string, isLatest: boolean, onDataChange: () => void }) {
     const { toast } = useToast();
     const { exec: authConfirm, isLoading: isConfirming } = useAuthAction(confirmFileReceipt, { onSuccess: (r) => { if (r && r.message?.includes('Success')) { toast({ title: 'Receipt Confirmed' }); onDataChange(); } } });
     const handleConfirm = async () => { const fd = new FormData(); fd.append('fileNumber', fileNumber); fd.append('movementId', movement.id); await authConfirm(fd); };
@@ -462,4 +462,4 @@ const MovementDetails = ({ movement, index, total, fileNumber, fileSubject, isLa
             {movement.receivedAt && (<div className="rounded-md bg-muted/50 p-3 flex items-start gap-3"><UserCheck className="h-4 w-4 text-muted-foreground mt-0.5" /><div className="space-y-1"><p className="text-sm font-medium">Receipt Acknowledged</p><p className="text-xs text-muted-foreground">By {movement.receivedBy} on {format(toDate(movement.receivedAt)!, 'PPP')}</p></div></div>)}
         </div>
     );
-};
+}
