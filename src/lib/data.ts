@@ -341,11 +341,13 @@ export const moveFile = async (data: any): Promise<{ file?: CorrespondenceFile, 
     const fileDoc = fileSnapshot.docs[0];
     const fileData = fileDoc.data()!;
     
-    // Resolve group of the recipient
-    let resolvedGroup = fileData.group || 'no group yet';
-    const attorneySnap = await getAttorneyCollectionRef().where('fullName', '==', data.movedTo).limit(1).get();
-    if (!attorneySnap.empty) {
-        resolvedGroup = attorneySnap.docs[0].data().group || 'no group yet';
+    // Resolve group of the recipient resiliently
+    let resolvedGroup = 'no group yet';
+    const attorneySnap = await getAttorneyCollectionRef().get();
+    const attorneys = attorneySnap.docs.map(d => docToType<Attorney>(d));
+    const targetAttorney = attorneys.find(a => a.fullName.trim().toLowerCase() === data.movedTo.trim().toLowerCase());
+    if (targetAttorney) {
+        resolvedGroup = targetAttorney.group || 'no group yet';
     }
 
     const newMovement: Movement = {
@@ -371,11 +373,13 @@ export const batchMoveFiles = async (data: any) => {
     const firestore = getFirestore(initializeAdmin());
     const batch = firestore.batch();
     
-    // Resolve group of the recipient once
+    // Resolve group of the recipient
     let resolvedGroup = 'no group yet';
-    const attorneySnap = await getAttorneyCollectionRef().where('fullName', '==', data.movedTo).limit(1).get();
-    if (!attorneySnap.empty) {
-        resolvedGroup = attorneySnap.docs[0].data().group || 'no group yet';
+    const attorneySnap = await getAttorneyCollectionRef().get();
+    const attorneys = attorneySnap.docs.map(d => docToType<Attorney>(d));
+    const targetAttorney = attorneys.find(a => a.fullName.trim().toLowerCase() === data.movedTo.trim().toLowerCase());
+    if (targetAttorney) {
+        resolvedGroup = targetAttorney.group || 'no group yet';
     }
 
     for (const fileNum of data.fileNumbers) {
@@ -395,7 +399,7 @@ export const batchMoveFiles = async (data: any) => {
             const updatePayload: any = {
                 movements: FieldValue.arrayUnion(newMovement),
                 requests: updatedRequests,
-                group: data.group || resolvedGroup, // Prefer manual assignment if provided in batch dialog
+                group: data.group || resolvedGroup,
                 lastActivityAt: FieldValue.serverTimestamp()
             };
 
@@ -455,7 +459,8 @@ export const batchPickupFiles = async (fileNumbers: string[], receivedBy: string
             batch.update(doc.ref, {
                 movements: FieldValue.arrayUnion(newMovement),
                 lastActivityAt: FieldValue.serverTimestamp(),
-                requests: []
+                requests: [],
+                group: 'no group yet'
             });
         }
     }
@@ -713,6 +718,8 @@ export const createAttorney = async (data: any) => {
     const accessId = `AT-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
     const docRef = await getAttorneyCollectionRef().add({
         ...data,
+        fullName: data.fullName.trim(),
+        group: data.group ? data.group.trim() : 'no group yet',
         accessId,
     });
     return { id: docRef.id, accessId };
@@ -725,50 +732,49 @@ export const getAttorneyById = async (id: string): Promise<Attorney | null> => {
 };
 
 export const updateAttorney = async (id: string, data: any) => {
-    await getAttorneyCollectionRef().doc(id).update(data);
+    await getAttorneyCollectionRef().doc(id).update({
+        ...data,
+        fullName: data.fullName.trim(),
+        group: data.group ? data.group.trim() : 'no group yet'
+    });
 };
 
 export const propagateAttorneyGroupChange = async (attorneyName: string, newGroup: string) => {
     const firestore = getFirestore(initializeAdmin());
     const batch = firestore.batch();
     
-    // Get ALL active files to check for Lead and current possession
-    const filesSnapshot = await getFileCollectionRef()
-        .where('status', '==', 'Active')
-        .get();
+    const filesSnapshot = await getFileCollectionRef().get();
 
     const normalizedName = attorneyName.toLowerCase().trim();
-    const normalizedTargetGroup = (newGroup || 'no group yet').toLowerCase().trim();
+    const resolvedGroup = newGroup?.trim() || 'no group yet';
 
     filesSnapshot.docs.forEach(doc => {
         const data = doc.data();
         let shouldUpdate = false;
 
-        // 1. Is this attorney the Lead? (Matches name exactly or case-insensitively)
+        // 1. Check Lead Assignee
         if (data.assignedTo?.toLowerCase().trim() === normalizedName) {
             shouldUpdate = true;
         }
 
-        // 2. Regardless of category, if the file is currently in this attorney's possession, it should follow them
+        // 2. Check Physical Holder (for Miscellaneous files)
         const movements = data.movements || [];
-        const sortedMovements = [...movements].sort((a,b) => {
-            const dA = a.date instanceof Timestamp ? a.date.toDate() : new Date(a.date);
-            const dB = b.date instanceof Timestamp ? b.date.toDate() : new Date(b.date);
-            const timeDiff = dB.getTime() - dA.getTime();
-            if (timeDiff !== 0) return timeDiff;
-            return b.id.localeCompare(a.id);
-        });
-        
-        const latest = sortedMovements[0];
-        if (latest?.movedTo?.toLowerCase().trim() === normalizedName) {
-            shouldUpdate = true;
+        if (movements.length > 0) {
+            const sortedMovements = [...movements].sort((a,b) => {
+                const dA = a.date instanceof Timestamp ? a.date.toDate() : new Date(a.date);
+                const dB = b.date instanceof Timestamp ? b.date.toDate() : new Date(b.date);
+                if (dB.getTime() !== dA.getTime()) return dB.getTime() - dA.getTime();
+                return b.id.localeCompare(a.id);
+            });
+            const latest = sortedMovements[0];
+            if (latest?.movedTo?.toLowerCase().trim() === normalizedName) {
+                shouldUpdate = true;
+            }
         }
 
-        const currentFileGroup = (data.group || 'no group yet').toLowerCase().trim();
-
-        if (shouldUpdate && currentFileGroup !== normalizedTargetGroup) {
+        if (shouldUpdate && data.group !== resolvedGroup) {
             batch.update(doc.ref, { 
-                group: newGroup || 'no group yet',
+                group: resolvedGroup,
                 lastActivityAt: FieldValue.serverTimestamp() 
             });
         }
@@ -780,13 +786,14 @@ export const propagateAttorneyGroupChange = async (attorneyName: string, newGrou
 export const propagateAttorneyNameChange = async (oldName: string, newName: string) => {
     const firestore = getFirestore(initializeAdmin());
     const filesSnapshot = await getFileCollectionRef().get();
-    const censusSnapshot = await getCensusCollectionRef().where('attorney', '==', oldName).get();
+    const censusSnapshot = await getCensusCollectionRef().where('attorney', '==', oldName.trim()).get();
     const batch = firestore.batch();
     
     const normalizedOld = oldName.toLowerCase().trim();
+    const trimmedNew = newName.trim();
 
     censusSnapshot.docs.forEach(doc => {
-        batch.update(doc.ref, { attorney: newName });
+        batch.update(doc.ref, { attorney: trimmedNew });
     });
 
     filesSnapshot.docs.forEach(doc => {
@@ -795,13 +802,13 @@ export const propagateAttorneyNameChange = async (oldName: string, newName: stri
         const updates: any = {};
 
         if (data.assignedTo?.toLowerCase().trim() === normalizedOld) {
-            updates.assignedTo = newName;
+            updates.assignedTo = trimmedNew;
             changed = true;
         }
 
         if (data.coAssignees) {
             const newCo = data.coAssignees.map((name: string) => 
-                name.toLowerCase().trim() === normalizedOld ? newName : name
+                name.toLowerCase().trim() === normalizedOld ? trimmedNew : name
             );
             if (JSON.stringify(newCo) !== JSON.stringify(data.coAssignees)) {
                 updates.coAssignees = newCo;
@@ -812,8 +819,8 @@ export const propagateAttorneyNameChange = async (oldName: string, newName: stri
         if (data.movements) {
             const newMovements = data.movements.map((m: any) => {
                 let mChanged = false;
-                if (m.movedTo?.toLowerCase().trim() === normalizedOld) { m.movedTo = newName; mChanged = true; }
-                if (m.receivedBy?.toLowerCase().trim() === normalizedOld) { m.receivedBy = newName; mChanged = true; }
+                if (m.movedTo?.toLowerCase().trim() === normalizedOld) { m.movedTo = trimmedNew; mChanged = true; }
+                if (m.receivedBy?.toLowerCase().trim() === normalizedOld) { m.receivedBy = trimmedNew; mChanged = true; }
                 if (mChanged) changed = true;
                 return m;
             });
@@ -824,10 +831,10 @@ export const propagateAttorneyNameChange = async (oldName: string, newName: stri
             const newInstructions = data.internalInstructions.map((i: any) => {
                 let iChanged = false;
                 if (i.from?.toLowerCase().trim() === normalizedOld || i.from?.toLowerCase().includes(`(${normalizedOld})`)) { 
-                    i.from = i.from.replace(oldName, newName); 
+                    i.from = i.from.replace(oldName, trimmedNew); 
                     iChanged = true; 
                 }
-                if (i.to?.toLowerCase().trim() === normalizedOld) { i.to = newName; iChanged = true; }
+                if (i.to?.toLowerCase().trim() === normalizedOld) { i.to = trimmedNew; iChanged = true; }
                 if (iChanged) changed = true;
                 return i;
             });
@@ -838,7 +845,7 @@ export const propagateAttorneyNameChange = async (oldName: string, newName: stri
             const newRequests = data.requests.map((r: any) => {
                 if (r.requesterName?.toLowerCase().trim() === normalizedOld) {
                     changed = true;
-                    return { ...r, requesterName: newName };
+                    return { ...r, requesterName: trimmedNew };
                 }
                 return r;
             });

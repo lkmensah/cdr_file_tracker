@@ -69,30 +69,29 @@ export async function updateAttorney(clientToken: string, formData: FormData) {
     if (!validated.success) return { message: validated.error.errors[0].message };
 
     try {
-        // Fetch current attorney to check for name or group changes
         const currentAttorney = await db.getAttorneyById(id);
         if (!currentAttorney) return { message: 'Attorney not found.' };
 
-        // Normalize group names for accurate comparison (handle undefined/null/empty as the same state)
+        // Normalize for comparison
         const oldGroup = (currentAttorney.group || 'no group yet').trim().toLowerCase();
         const newGroup = (validated.data.group || 'no group yet').trim().toLowerCase();
         
-        const nameChanged = currentAttorney.fullName !== validated.data.fullName;
+        const nameChanged = currentAttorney.fullName.trim() !== validated.data.fullName.trim();
         const groupChanged = oldGroup !== newGroup;
 
         await db.updateAttorney(id, validated.data);
 
-        // 1. Handle Name Change
+        // 1. Handle Name Change System-wide
         if (nameChanged) {
             await db.propagateAttorneyNameChange(currentAttorney.fullName, validated.data.fullName);
             await logUserActivity(userName, 'UPDATE_ATTORNEY_NAME', `Renamed attorney from ${currentAttorney.fullName} to ${validated.data.fullName}. System-wide records updated.`);
         }
 
-        // 2. Handle Group Migration (Crucial for existing files)
+        // 2. Handle Group Migration System-wide
         if (groupChanged || nameChanged) {
             const targetGroup = validated.data.group || 'no group yet';
             await db.propagateAttorneyGroupChange(validated.data.fullName, targetGroup);
-            await logUserActivity(userName, 'ATTORNEY_GROUP_MIGRATION', `Migrated ${validated.data.fullName} to ${targetGroup}. Existing active and possessed files synchronized.`);
+            await logUserActivity(userName, 'ATTORNEY_GROUP_MIGRATION', `Migrated ${validated.data.fullName} to ${targetGroup}. All lead and possessed files updated for executive oversight.`);
         } else {
             await logUserActivity(userName, 'UPDATE_ATTORNEY', `Updated attorney details: ${validated.data.fullName}`);
         }
@@ -100,6 +99,7 @@ export async function updateAttorney(clientToken: string, formData: FormData) {
         revalidatePath('/attorneys');
         revalidatePath('/census');
         revalidatePath('/files');
+        revalidatePath('/portal/dashboard');
         return { message: 'Success! Attorney updated.' };
     } catch (error) {
         console.error("Propagation error:", error);
