@@ -88,17 +88,18 @@ export function MoveFileDialog({ isOpen, onOpenChange, files }: MoveFileDialogPr
 
   const groupOptions = React.useMemo(() => {
     const groups = new Set<string>();
+    // Pre-seed with default to ensure uniqueness
+    groups.add('no group yet');
+    
     attorneys?.forEach(a => { 
         if (a.group && a.group.trim() !== '') {
-            groups.add(a.group);
+            groups.add(a.group.trim());
         }
     });
-    const options = Array.from(groups).map(g => ({ label: g, value: g }));
     
-    // Explicitly add "no group yet"
-    options.push({ label: 'no group yet', value: 'no group yet' });
-    
-    return options.sort((a, b) => a.label.localeCompare(b.label));
+    return Array.from(groups)
+        .map(g => ({ label: g, value: g }))
+        .sort((a, b) => a.label.localeCompare(b.label));
   }, [attorneys]);
   
   const handleSuccess = (result: any) => {
