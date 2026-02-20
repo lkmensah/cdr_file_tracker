@@ -156,6 +156,18 @@ export const updateFile = async (fileData: any): Promise<{ file?: Correspondence
     return { file: docToType<CorrespondenceFile>(updatedDoc) };
 };
 
+export const recordMovementNotification = async (fileNumber: string, movementId: string, phone: string) => {
+    const snap = await getFileCollectionRef().where('fileNumber', '==', fileNumber.trim()).limit(1).get();
+    if (snap.empty) throw new Error("File not found.");
+    const doc = snap.docs[0];
+    const movements = (doc.data()!.movements || []).map((m: any) => {
+        if (m.id === movementId) return { ...m, notifiedByPhone: phone };
+        return m;
+    });
+    await doc.ref.update({ movements, lastActivityAt: FieldValue.serverTimestamp() });
+    return { success: true };
+};
+
 export const addFileAttachment = async (fileNumber: string, attachment: Attachment) => {
     const snapshot = await getFileCollectionRef().where('fileNumber', '==', fileNumber).limit(1).get();
     if (snapshot.empty) throw new Error('File not found.');

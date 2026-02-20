@@ -28,6 +28,7 @@ export type Movement = {
     status: string;
     receivedAt?: Date;
     receivedBy?: string;
+    notifiedByPhone?: string; // Contact of the registry staff who sent the notification
 };
 
 export type CaseReminder = {

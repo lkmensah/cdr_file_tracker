@@ -343,8 +343,9 @@ export default function PortalFileDetail() {
     }
 
     const handleReportDiscrepancy = () => {
+        const notifierPhone = latestMovement?.notifiedByPhone?.replace(/\D/g, '') || '233244000000';
         const msg = encodeURIComponent(`Hello Registry,\n\nI am reporting an inspection issue with file *${file.fileNumber}* (${file.subject}). It is listed as arriving at my desk, but I cannot verify its physical presence or it has been sent to me in error.\n\nPlease verify.`);
-        window.open(`https://wa.me/233244000000?text=${msg}`, '_blank');
+        window.open(`https://wa.me/${notifierPhone}?text=${msg}`, '_blank');
         toast({ title: 'Issue Reported' });
     }
 

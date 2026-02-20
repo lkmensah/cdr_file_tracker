@@ -324,6 +324,14 @@ export default function PortalDashboard() {
         const confirmed = allArrivals.filter(f => selectedArrivalIds.has(f.id));
         const missing = allArrivals.filter(f => !selectedArrivalIds.has(f.id));
 
+        // Use notifiedByPhone from the first file in the list as primary contact, fallback to registry
+        let registryPhone = '233244000000';
+        const firstFile = allArrivals[0];
+        if (firstFile) {
+            const latest = [...(firstFile.movements || [])].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0))[0];
+            if (latest?.notifiedByPhone) registryPhone = latest.notifiedByPhone.replace(/\D/g, '');
+        }
+
         let message = `Hello Registry,\n\nI am reporting a discrepancy in physical file arrivals for my desk.\n\n`;
         
         if (confirmed.length > 0) {
@@ -336,7 +344,7 @@ export default function PortalDashboard() {
 
         message += `Please verify physical location. Thank you.`;
         
-        window.open(`https://wa.me/233244000000?text=${encodeURIComponent(message)}`, '_blank'); // Example registry number
+        window.open(`https://wa.me/${registryPhone}?text=${encodeURIComponent(message)}`, '_blank');
         toast({ title: 'Report Discrepancy', description: 'WhatsApp message prepared for Registry.' });
     };
 
@@ -776,8 +784,9 @@ export default function PortalDashboard() {
                                             onClick={(e) => {
                                                 e.preventDefault();
                                                 e.stopPropagation();
+                                                const notifierPhone = latestMovement?.notifiedByPhone?.replace(/\D/g, '') || '233244000000';
                                                 const msg = encodeURIComponent(`Hello Registry,\n\nI am reporting an issue with file *${file.fileNumber}* (${file.subject}). It is showing as arriving at my desk but either it's not here or it's been sent to me in error.\n\nPlease verify.`);
-                                                window.open(`https://wa.me/233244000000?text=${msg}`, '_blank');
+                                                window.open(`https://wa.me/${notifierPhone}?text=${msg}`, '_blank');
                                             }}
                                         >
                                             <AlertCircle className="h-4 w-4" />

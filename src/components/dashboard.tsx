@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { CorrespondenceFile, Letter, Movement, Attorney, CaseReminder, FileRequest, Reminder } from '@/lib/types';
@@ -24,7 +25,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { useAuthAction } from '@/hooks/use-auth-action';
-import { confirmFileReceipt, toggleReminder, cancelFileRequest, markFileAsViewed, toggleGeneralReminder } from '@/app/actions';
+import { confirmFileReceipt, toggleReminder, cancelFileRequest, markFileAsViewed, toggleGeneralReminder, recordNotification } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
@@ -163,6 +164,7 @@ export function Dashboard({
   const { exec: authToggleGeneralReminder } = useAuthAction(toggleGeneralReminder);
   const { exec: authCancelRequest } = useAuthAction(cancelFileRequest);
   const { exec: authMarkViewed } = useAuthAction(markFileAsViewed);
+  const { exec: authRecordNotification } = useAuthAction(recordNotification);
 
   const handleViewFile = (fileId: string) => {
     setSelectedFileId(fileId);
@@ -177,11 +179,15 @@ export function Dashboard({
   }, [firestore, selectedFileId]);
   const { data: selectedFileForDetail } = useDoc<CorrespondenceFile>(selectedFileRef);
 
-  const handleNotifyAttorney = (file: typeof inTransitFiles[0]) => {
+  const handleNotifyAttorney = async (file: typeof inTransitFiles[0]) => {
     const destination = file.latestMovement.movedTo;
     const targetAttorney = attorneys?.find(a => a.fullName.toLowerCase() === destination.toLowerCase());
     
     if (targetAttorney?.phoneNumber) {
+        if (profile?.phoneNumber) {
+            await authRecordNotification(file.fileNumber, file.latestMovement.id, profile.phoneNumber);
+        }
+
         const truncatedSubject = truncate(file.subject, 60);
         const message = encodeURIComponent(
             `Hello ${targetAttorney.fullName},\n\nThe following physical file has been delivered to your desk:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease log in to your Attorney Portal immediately to verify and confirm receipt of the physical folder.\n\nThank you.`
@@ -233,10 +239,16 @@ export function Dashboard({
     }
   };
 
-  const handleNotifyBatch = (destination: string, files: typeof inTransitFiles) => {
+  const handleNotifyBatch = async (destination: string, files: typeof inTransitFiles) => {
     const targetAttorney = attorneys?.find(a => a.fullName.toLowerCase() === destination.toLowerCase());
     
     if (targetAttorney?.phoneNumber) {
+        if (profile?.phoneNumber) {
+            for (const f of files) {
+                await authRecordNotification(f.fileNumber, f.latestMovement.id, profile.phoneNumber);
+            }
+        }
+
         const fileList = files.map(f => `• *${f.fileNumber}* - ${truncate(f.subject, 60)}`).join('\n');
         const message = encodeURIComponent(
             `Hello ${targetAttorney.fullName},\n\nThe following physical file(s) have been delivered to your desk:\n\n${fileList}\n\nPlease log in to your Attorney Portal immediately to verify and confirm receipt of the physical folder(s).\n\nThank you.`

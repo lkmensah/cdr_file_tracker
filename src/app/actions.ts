@@ -254,7 +254,7 @@ export async function addCorrespondence(
   const { fullName } = await verifyAndGetUser(clientToken);
 
   const rawFormData = Object.fromEntries(formData.entries());
-  const validatedFields = AddCorrespondenceSchema.safeParse(rawFormData);
+  const validatedFields = BaseCorrespondenceSchema.safeParse(rawFormData);
 
   if (!validatedFields.success) {
     const firstError = Object.values(validatedFields.error.flatten().fieldErrors)[0]?.[0];
@@ -425,6 +425,16 @@ export async function batchMoveFiles(
         return { message: `Success! ${fileNumbers.length} files have been updated and moved.` };
     } catch (error) {
         return { message: 'Database Error: Failed to perform batch move.' };
+    }
+}
+
+export async function recordNotification(clientToken: string, fileNumber: string, movementId: string, phone: string) {
+    await verifyAndGetUser(clientToken);
+    try {
+        await db.recordMovementNotification(fileNumber, movementId, phone);
+        return { success: true };
+    } catch (error: any) {
+        return { success: false, message: error.message };
     }
 }
 
