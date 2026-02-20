@@ -29,7 +29,6 @@ import {
     Plus,
     Loader2,
     Pin,
-    PinOff,
     Star,
     Bell,
     MessageSquare,
@@ -49,7 +48,6 @@ import {
     Users,
     FileDown,
     Filter,
-    User,
     HandIcon,
     ShieldAlert
 } from 'lucide-react';
@@ -128,7 +126,7 @@ const categories = [
 
 const toDate = (value: any): Date | null => {
     if (!value) return null;
-    if (value.toDate) return value.toDate(); // Firestore Timestamp
+    if (value.toDate) return value.toDate(); 
     if (value instanceof Date) return value;
     const d = new Date(value);
     if (!isNaN(d.getTime())) return d;
@@ -137,7 +135,7 @@ const toDate = (value: any): Date | null => {
 
 const STAGNATION_THRESHOLD_DAYS = 14;
 const OVERLOAD_THRESHOLD = 10;
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 24; // Multiples of 3 work best for the grid
 
 const workloadChartConfig = {
   active: {
@@ -231,8 +229,7 @@ export default function PortalDashboard() {
             const isAtMyDesk = latestMovement?.movedTo?.toLowerCase().trim() === myName;
             
             const fileGroup = (file.group || 'no group yet').toLowerCase().trim();
-            const isInMyGroup = (attorney.group || 'no group yet').toLowerCase().trim() === fileGroup;
-            const canOversight = (attorney.isGroupHead || attorney.isActingGroupHead) && isInMyGroup;
+            const isInMyGroup = (attorney.isGroupHead || attorney.isActingGroupHead) && isInMyGroup;
 
             const isPinned = file.pinnedBy?.[attorney.id] === true;
             const wasPreviouslyInvolved = file.movements?.some(m => m.movedTo?.toLowerCase().trim() === myName);
@@ -355,12 +352,10 @@ export default function PortalDashboard() {
         
         myRelatedFiles.forEach(file => {
             const lastViewedAt = toDate(file.viewedBy?.[attorney.id]);
-            // If never viewed, check last 24 hours. Otherwise check since last clear.
             const referencePoint = lastViewedAt || last24h;
             
             (file.internalInstructions || []).forEach(i => {
                 const d = toDate(i.date);
-                // Notification must be AFTER reference point AND NOT from user AND NOT in the future
                 if (d && isAfter(d, referencePoint) && !isAfter(d, now) && i.from.toLowerCase().trim() !== myName) {
                     notes.push({ id: i.id, fileId: file.id, fileNumber: file.fileNumber, message: `New message from ${i.from}`, timestamp: d, type: 'communication' });
                 }
@@ -385,7 +380,6 @@ export default function PortalDashboard() {
             }
         });
         
-        // Sort descending by timestamp
         return notes.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 30);
     }, [myRelatedFiles, attorney, isSG]);
 
@@ -609,8 +603,8 @@ export default function PortalDashboard() {
         const isCompleted = file.status === 'Completed';
 
         return (
-            <Link href={`/portal/file/${file.id}`} className="block relative group min-w-0">
-                <Card className={cn("hover:border-primary/50 transition-colors shadow-sm border-l-4 overflow-hidden", 
+            <Link href={`/portal/file/${file.id}`} className="block h-full group relative">
+                <Card className={cn("h-full hover:border-primary transition-all duration-300 shadow-sm border-l-4 overflow-hidden flex flex-col group-hover:shadow-md", 
                     isCompleted ? "border-l-green-500 bg-green-50/5 opacity-90" : 
                     type === 'pinned' ? "border-l-yellow-500 bg-yellow-50/10" : 
                     type === 'primary' ? "border-l-primary" : 
@@ -618,64 +612,69 @@ export default function PortalDashboard() {
                     type === 'oversight' ? "border-l-purple-500 bg-purple-50/5" :
                     type === 'historical' ? "border-l-muted-foreground/30 grayscale-[0.5] opacity-80" :
                     "border-l-blue-500")}>
-                    <CardContent className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 min-w-0">
-                        <div className="space-y-1 flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                                <span className={cn("font-mono text-xs font-bold shrink-0", 
-                                    isCompleted ? "text-green-600" :
-                                    type === 'pinned' ? "text-yellow-600" : 
-                                    type === 'primary' ? "text-primary" : 
-                                    type === 'collaborative' ? "text-teal-600" :
-                                    type === 'oversight' ? "text-purple-600" :
-                                    type === 'historical' ? "text-muted-foreground" :
-                                    "text-blue-600" )}>{file.fileNumber}</span>
-                                {isCompleted ? (
-                                    <Badge variant="secondary" className="text-[9px] uppercase h-4 bg-green-100 text-green-800 border-green-200 shrink-0">Resolved</Badge>
-                                ) : isSG ? (
-                                    <Badge variant="outline" className="text-[9px] uppercase h-4 border-yellow-500 text-yellow-700 bg-yellow-50/50 shrink-0">Executive Control</Badge>
-                                ) : isLead ? (
-                                    <Badge variant="outline" className="text-[9px] uppercase h-4 shrink-0">Lead Assignee</Badge>
-                                ) : isTeam ? (
-                                    <Badge variant="outline" className="text-[9px] uppercase h-4 border-teal-500 text-teal-700 bg-teal-50 shrink-0">Team Member</Badge>
-                                ) : type === 'oversight' ? (
-                                    <Badge variant="secondary" className="text-[9px] uppercase h-4 bg-purple-100 text-purple-700 border-purple-200 shrink-0">Group Insight</Badge>
-                                ) : type === 'historical' ? (
-                                    <Badge variant="outline" className="text-[9px] uppercase h-4 text-muted-foreground border-muted-foreground/20 shrink-0">Previous Assignment</Badge>
-                                ) : (
-                                    <Badge variant="secondary" className="text-[9px] uppercase h-4 bg-blue-50 text-blue-700 border-blue-100 shrink-0">Possession</Badge>
-                                )}
-                                {isRecentlyUpdated && !isCompleted && type !== 'historical' && (
-                                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 shrink-0">
-                                        <div className="h-1.5 w-1.5 rounded-full bg-red-600 animate-pulse" />
-                                        <span className="text-[9px] font-bold uppercase tracking-tighter">Updated</span>
-                                    </div>
-                                )}
+                    <CardContent className="p-5 flex flex-col flex-1 gap-4 min-w-0">
+                        <div className="space-y-3 flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 overflow-hidden">
+                                    <span className={cn("font-mono text-[10px] font-bold shrink-0 px-1.5 py-0.5 rounded bg-muted/50", 
+                                        isCompleted ? "text-green-600" :
+                                        type === 'pinned' ? "text-yellow-600" : 
+                                        type === 'primary' ? "text-primary" : 
+                                        type === 'collaborative' ? "text-teal-600" :
+                                        type === 'oversight' ? "text-purple-600" :
+                                        type === 'historical' ? "text-muted-foreground" :
+                                        "text-blue-600" )}>{file.fileNumber}</span>
+                                    {isRecentlyUpdated && !isCompleted && type !== 'historical' && (
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <div className="h-1.5 w-1.5 rounded-full bg-red-600 animate-pulse" />
+                                            <span className="text-[8px] font-black uppercase text-red-600 tracking-tight">New</span>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex gap-1 shrink-0">
+                                    {isCompleted ? (
+                                        <Badge variant="secondary" className="text-[8px] uppercase h-4 bg-green-100 text-green-800 border-green-200">Resolved</Badge>
+                                    ) : isSG ? (
+                                        <Badge variant="outline" className="text-[8px] uppercase h-4 border-yellow-500 text-yellow-700 bg-yellow-50/50">Executive</Badge>
+                                    ) : isLead ? (
+                                        <Badge variant="outline" className="text-[8px] uppercase h-4">Lead</Badge>
+                                    ) : isTeam ? (
+                                        <Badge variant="outline" className="text-[8px] uppercase h-4 border-teal-500 text-teal-700 bg-teal-50">Team</Badge>
+                                    ) : type === 'oversight' ? (
+                                        <Badge variant="secondary" className="text-[8px] uppercase h-4 bg-purple-100 text-purple-700 border-purple-200">Oversight</Badge>
+                                    ) : (
+                                        <Badge variant="secondary" className="text-[8px] uppercase h-4 bg-blue-50 text-blue-700 border-blue-100">At Desk</Badge>
+                                    )}
+                                </div>
                             </div>
-                            <h4 className="font-bold text-sm leading-tight truncate" title={file.subject}>{file.subject}</h4>
-                            <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase font-bold tracking-tighter overflow-hidden">
-                                <span className={cn("shrink-0", isCompleted ? "text-green-600" : "text-primary")}>{file.category}</span>
-                                <span className="shrink-0">•</span>
-                                <span className="shrink-0">Group: {file.group || 'no group yet'}</span>
-                                <span className="shrink-0">•</span>
-                                {isLead || (!file.assignedTo && isWithMe) ? (
-                                    <span className="truncate max-w-[150px]">Location: {isWithMe ? 'At My Desk' : (latestMovement?.movedTo || 'Registry')}</span>
-                                ) : (
-                                    <span className="truncate max-w-[150px]">Lead: {file.assignedTo || 'General / Shared'}</span>
-                                )}
-                            </div>
+                            
+                            <h4 className="font-bold text-sm leading-snug line-clamp-3 group-hover:text-primary transition-colors" title={file.subject}>
+                                {file.subject}
+                            </h4>
                         </div>
-                        <div className="flex items-center gap-4 text-muted-foreground shrink-0 self-end sm:self-center">
-                            <div className="text-right hidden sm:block">
-                                <p className="text-[10px] uppercase tracking-tighter">Last Activity</p>
-                                <p className="text-xs font-medium whitespace-nowrap">{format(toDate(file.lastActivityAt || file.reportableDate || file.dateCreated)!, 'MMM d, p')}</p>
+
+                        <div className="pt-3 border-t space-y-2">
+                            <div className="flex items-center justify-between text-[9px] uppercase font-bold tracking-widest text-muted-foreground">
+                                <span className="truncate max-w-[60%]">{file.category}</span>
+                                <span className="shrink-0">{format(toDate(file.lastActivityAt || file.reportableDate || file.dateCreated)!, 'MMM d')}</span>
                             </div>
-                            <ChevronRight className="h-5 w-5" />
+                            <div className="flex items-center gap-2 min-w-0">
+                                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                    <Badge variant="outline" className="bg-muted/30 text-[9px] h-5 py-0 border-none shrink-0">
+                                        <Truck className="h-2.5 w-2.5 mr-1" /> {isWithMe ? 'At My Desk' : (latestMovement?.movedTo || 'Registry')}
+                                    </Badge>
+                                    {!isLead && file.assignedTo && (
+                                        <span className="text-[9px] text-muted-foreground truncate italic">Lead: {file.assignedTo}</span>
+                                    )}
+                                </div>
+                                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
                 {!isCompleted && !isSG && type !== 'historical' && (
-                    <Button variant="ghost" size="icon" className={cn("absolute top-2 right-2 h-8 w-8 transition-opacity", file.pinnedBy?.[attorney.id] ? "opacity-100 text-yellow-500" : "opacity-0 group-hover:opacity-100")} onClick={(e) => handleTogglePin(e, file.id)}>
-                        {file.pinnedBy?.[attorney.id] ? <Pin className="h-4 w-4 fill-current" /> : <Pin className="h-4 w-4" />}
+                    <Button variant="ghost" size="icon" className={cn("absolute top-3 right-3 h-7 w-7 transition-all rounded-full bg-background/80 backdrop-blur-sm shadow-sm border", file.pinnedBy?.[attorney.id] ? "opacity-100 text-yellow-500 scale-110" : "opacity-0 group-hover:opacity-100 scale-100")} onClick={(e) => handleTogglePin(e, file.id)}>
+                        <Star className={cn("h-3.5 w-3.5", file.pinnedBy?.[attorney.id] && "fill-current")} />
                     </Button>
                 )}
             </Link>
@@ -687,8 +686,8 @@ export default function PortalDashboard() {
     return (
         <div className="min-h-screen bg-muted/20 pb-20 font-body">
             <header className="sticky top-0 z-10 bg-background border-b px-4 h-16 flex items-center justify-between shadow-sm">
-                <div className="flex items-center gap-2">
-                    <div className={cn("p-1.5 rounded-md", isSG ? "bg-yellow-500" : "bg-primary")}>
+                <div className="flex items-center gap-3">
+                    <div className={cn("p-2 rounded-lg", isSG ? "bg-yellow-500" : "bg-primary")}>
                         {isSG ? <Crown className="h-5 w-5 text-white" /> : <Folder className="h-5 w-5 text-primary-foreground" />}
                     </div>
                     <div className="hidden sm:block">
@@ -706,22 +705,22 @@ export default function PortalDashboard() {
                                 <Badge variant="secondary" className="bg-muted text-muted-foreground text-[8px] h-4 uppercase font-bold px-1.5 py-0">Practitioner</Badge>
                             )}
                         </div>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">{attorney?.group || 'no group yet'}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase font-black tracking-[0.1em] mt-1">{attorney?.group || 'no group yet'}</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                     <Popover>
                         <PopoverTrigger asChild>
-                            <Button variant="ghost" size="icon" className="relative h-9 w-9">
+                            <Button variant="ghost" size="icon" className="relative h-10 w-10 hover:bg-muted/50 transition-colors">
                                 <Bell className="h-5 w-5 text-muted-foreground" />
                                 {notifications.length > 0 && (
-                                    <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-bold text-white ring-2 ring-background animate-in zoom-in-50">
+                                    <span className="absolute top-2 right-2 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-bold text-white ring-2 ring-background animate-in zoom-in-50">
                                         {notifications.length}
                                     </span>
                                 )}
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-[320px] sm:w-[400px] p-0 shadow-2xl overflow-hidden" align="end">
+                        <PopoverContent className="w-[350px] sm:w-[450px] p-0 shadow-2xl overflow-hidden rounded-xl border-primary/10" align="end">
                             <div className="flex items-center justify-between p-4 bg-muted/30 border-b">
                                 <h3 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
                                     <Bell className="h-3.5 w-3.5" /> Recent Activity
@@ -730,7 +729,7 @@ export default function PortalDashboard() {
                                     <Button 
                                         variant="ghost" 
                                         size="sm" 
-                                        className="h-7 text-[10px] uppercase font-bold text-muted-foreground hover:text-primary"
+                                        className="h-7 text-[10px] uppercase font-bold text-muted-foreground hover:text-primary transition-colors"
                                         onClick={handleClearAllNotifications}
                                         disabled={isClearing}
                                     >
@@ -739,18 +738,18 @@ export default function PortalDashboard() {
                                     </Button>
                                 )}
                             </div>
-                            <ScrollArea className="max-h-[400px]">
+                            <ScrollArea className="max-h-[450px]">
                                 {notifications.length > 0 ? (
                                     <div className="grid divide-y">
                                         {notifications.map(note => (
-                                            <Link key={note.id} href={`/portal/file/${note.fileId}`} className="p-4 hover:bg-muted/50 transition-colors block">
-                                                <div className="flex items-start gap-3">
-                                                    <div className="p-2 rounded-full bg-red-100 text-red-600 shrink-0">
-                                                        {note.type === 'communication' ? <MessageSquare className="h-3.5 w-3.5" /> : note.type === 'folio' ? <FileText className="h-3.5 w-3.5" /> : note.type === 'draft' ? <Pencil className="h-3.5 w-3.5" /> : <Truck className="h-3.5 w-3.5" />}
+                                            <Link key={note.id} href={`/portal/file/${note.fileId}`} className="p-4 hover:bg-primary/5 transition-all duration-200 block group">
+                                                <div className="flex items-start gap-4">
+                                                    <div className="p-2.5 rounded-full bg-red-50 text-red-600 shrink-0 group-hover:scale-110 transition-transform shadow-sm border border-red-100">
+                                                        {note.type === 'communication' ? <MessageSquare className="h-4 w-4" /> : note.type === 'folio' ? <FileText className="h-4 w-4" /> : note.type === 'draft' ? <Pencil className="h-4 w-4" /> : <Truck className="h-4 w-4" />}
                                                     </div>
                                                     <div className="space-y-1 min-w-0 flex-1">
-                                                        <p className="text-sm font-semibold leading-tight text-foreground truncate">{note.message}</p>
-                                                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter truncate">
+                                                        <p className="text-sm font-bold leading-tight text-foreground truncate group-hover:text-primary transition-colors">{note.message}</p>
+                                                        <p className="text-[10px] text-muted-foreground uppercase font-black tracking-tighter truncate opacity-70">
                                                             File {note.fileNumber} • {formatDistanceToNow(note.timestamp)} ago
                                                         </p>
                                                     </div>
@@ -759,41 +758,41 @@ export default function PortalDashboard() {
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className="p-12 text-center text-muted-foreground space-y-2">
-                                        <CheckCircle2 className="h-8 w-8 mx-auto opacity-20" />
-                                        <p className="text-xs italic">All caught up!</p>
+                                    <div className="p-16 text-center text-muted-foreground space-y-3">
+                                        <div className="bg-muted/50 p-4 rounded-full w-fit mx-auto shadow-inner"><CheckCircle2 className="h-10 w-10 opacity-20" /></div>
+                                        <p className="text-xs font-bold uppercase tracking-widest">No New Alerts</p>
                                     </div>
                                 )}
                             </ScrollArea>
                         </PopoverContent>
                     </Popover>
 
-                    <div className="flex items-center bg-muted/50 p-1 rounded-lg border ml-2">
-                        <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setViewMode('list')}><List className="h-4 w-4" /><span className="hidden sm:inline">List</span></Button>
-                        <Button variant={viewMode === 'calendar' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setViewMode('calendar')}><CalendarIcon className="h-4 w-4" /><span className="hidden sm:inline">Calendar</span></Button>
+                    <div className="flex items-center bg-muted/50 p-1.5 rounded-xl border border-primary/10 ml-2 shadow-inner">
+                        <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2 rounded-lg" onClick={() => setViewMode('list')}><List className="h-4 w-4" /><span className="hidden sm:inline">Caseload</span></Button>
+                        <Button variant={viewMode === 'calendar' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2 rounded-lg" onClick={() => setViewMode('calendar')}><CalendarIcon className="h-4 w-4" /><span className="hidden sm:inline">Calendar</span></Button>
                         {isGroupExecutive && (
-                            <Button variant={viewMode === 'monitoring' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setViewMode('monitoring')}><Activity className="h-4 w-4" /><span className="hidden sm:inline">{isSG ? 'Oversight' : 'Monitoring'}</span></Button>
+                            <Button variant={viewMode === 'monitoring' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2 rounded-lg" onClick={() => setViewMode('monitoring')}><Activity className="h-4 w-4" /><span className="hidden sm:inline">{isSG ? 'Oversight' : 'Monitoring'}</span></Button>
                         )}
                     </div>
-                    <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-destructive ml-2"><LogOut className="h-4 w-4 mr-2" /> <span className="hidden sm:inline">Logout</span></Button>
+                    <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-destructive transition-colors ml-2 font-bold uppercase text-[10px] tracking-widest"><LogOut className="h-4 w-4 mr-2" /> <span className="hidden sm:inline">Logout</span></Button>
                 </div>
             </header>
 
-            <main className="container mx-auto p-3 md:p-4 lg:p-6 xl:p-8 space-y-8 min-w-0">
+            <main className="max-w-[1800px] mx-auto p-4 sm:p-6 lg:p-8 xl:p-10 space-y-10 min-w-0">
                 {viewMode === 'monitoring' && isGroupExecutive ? (
                     <section className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 min-w-0">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-background p-6 rounded-2xl border shadow-sm border-primary/10">
                             <div>
-                                <h2 className="text-2xl font-bold tracking-tight">{isSG ? 'Executive Oversight Hub' : 'Group Oversight Hub'}</h2>
-                                <p className="text-sm text-muted-foreground">Strategic monitoring for <strong>{isSG ? 'All groups' : attorney.group || 'no group yet'}</strong></p>
+                                <h2 className="text-3xl font-black tracking-tight flex items-center gap-3">{isSG ? <Crown className="h-8 w-8 text-yellow-500" /> : <ShieldCheck className="h-8 w-8 text-primary" />}{isSG ? 'Executive Oversight' : 'Group Hub'}</h2>
+                                <p className="text-sm text-muted-foreground mt-1">Strategic performance monitoring for <strong>{isSG ? 'All departments' : attorney.group || 'no group yet'}</strong></p>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-3">
                                 {isSG && (
                                     <div className="flex items-center gap-2 mr-2">
                                         <Filter className="h-4 w-4 text-muted-foreground" />
                                         <Select value={reportCategory} onValueChange={setReportCategory}>
-                                            <SelectTrigger className="h-9 w-[200px] text-xs">
-                                                <SelectValue placeholder="Category Filter" />
+                                            <SelectTrigger className="h-10 w-[220px] text-xs font-bold rounded-lg border-primary/10">
+                                                <SelectValue placeholder="Filter by Category" />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 {categories.map(c => (
@@ -803,60 +802,60 @@ export default function PortalDashboard() {
                                         </Select>
                                     </div>
                                 )}
-                                <Button variant="outline" size="sm" className="h-9 gap-2 border-primary/20 text-primary" onClick={handleGenerateStatusReport} disabled={isReporting}>
+                                <Button variant="outline" size="sm" className="h-10 gap-2 border-primary/20 text-primary font-bold hover:bg-primary/5 rounded-lg" onClick={handleGenerateStatusReport} disabled={isReporting}>
                                     {isReporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
                                     {isSG ? 'Master Status Report' : 'Group Status Report'}
                                 </Button>
                             </div>
                         </div>
-                        <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-                            <Card className="shadow-sm border-primary/10">
-                                <CardHeader className="pb-3 border-b bg-muted/10">
-                                    <div className="flex items-center gap-2">
-                                        <Scale className="h-5 w-5 text-primary" />
-                                        <div><CardTitle className="text-sm">Workload Distribution</CardTitle><CardDescription className="text-[10px] uppercase tracking-tighter font-bold">{isSG ? 'Cross-Group Analysis' : 'Files per Practitioner'}</CardDescription></div>
+                        <div className="grid gap-8 grid-cols-1 xl:grid-cols-2">
+                            <Card className="shadow-sm border-primary/10 rounded-2xl overflow-hidden">
+                                <CardHeader className="pb-4 border-b bg-muted/10">
+                                    <div className="flex items-center gap-3">
+                                        <Scale className="h-6 w-6 text-primary" />
+                                        <div><CardTitle className="text-base font-black uppercase tracking-tight">Workload Distribution</CardTitle><CardDescription className="text-[10px] uppercase tracking-widest font-black text-primary/60">{isSG ? 'Cross-Group Analysis' : 'Files per Practitioner'}</CardDescription></div>
                                     </div>
                                 </CardHeader>
-                                <CardContent className="pt-6">
+                                <CardContent className="pt-8">
                                     {(isSG ? executiveWorkloadAnalytics : groupWorkloadAnalytics).chartData.length > 0 ? (
-                                        <ChartContainer config={workloadChartConfig} className="min-h-[300px] w-full">
+                                        <ChartContainer config={workloadChartConfig} className="min-h-[350px] w-full">
                                             <BarChart data={(isSG ? executiveWorkloadAnalytics : groupWorkloadAnalytics).chartData} layout="vertical" margin={{ left: 40, right: 20 }}>
-                                                <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+                                                <CartesianGrid horizontal={false} strokeDasharray="3 3" opacity={0.3} />
                                                 <XAxis type="number" hide />
-                                                <YAxis dataKey="name" type="category" tickLine={false} tickMargin={10} axisLine={false} width={100} style={{ fontSize: '10px', fontWeight: 'bold' }} />
+                                                <YAxis dataKey="name" type="category" tickLine={false} tickMargin={10} axisLine={false} width={120} style={{ fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase' }} />
                                                 <ChartTooltip content={<ChartTooltipContent />} />
                                                 <ChartLegend content={<ChartLegendContent />} />
                                                 <Bar dataKey="active" stackId="a" fill="var(--color-active)" radius={[0, 0, 0, 0]} />
-                                                <Bar dataKey="completed" stackId="a" fill="var(--color-completed)" radius={[0, 4, 4, 0]} />
+                                                <Bar dataKey="completed" stackId="a" fill="var(--color-completed)" radius={[0, 6, 6, 0]} />
                                             </BarChart>
                                         </ChartContainer>
                                     ) : (
-                                        <div className="h-[300px] flex flex-col items-center justify-center text-center space-y-2">
-                                            <Folder className="h-10 w-10 text-muted-foreground/20" />
-                                            <p className="text-sm text-muted-foreground italic">No data available for analysis.</p>
+                                        <div className="h-[350px] flex flex-col items-center justify-center text-center space-y-3">
+                                            <Folder className="h-12 w-12 text-muted-foreground/20" />
+                                            <p className="text-sm text-muted-foreground italic font-medium">No departmental data recorded yet.</p>
                                         </div>
                                     )}
                                 </CardContent>
                             </Card>
-                            <Card className="shadow-sm border-primary/10">
-                                <CardHeader className="pb-3 border-b bg-muted/10">
-                                    <div className="flex items-center gap-2">
-                                        <Users className="h-5 w-5 text-primary" />
-                                        <div><CardTitle className="text-sm">{isSG ? 'Departmental Burden Rank' : 'Practitioner Burden Rank'}</CardTitle><CardDescription className="text-[10px] uppercase tracking-tighter font-bold">Comparative active caseload analysis</CardDescription></div>
+                            <Card className="shadow-sm border-primary/10 rounded-2xl overflow-hidden">
+                                <CardHeader className="pb-4 border-b bg-muted/10">
+                                    <div className="flex items-center gap-3">
+                                        <Users className="h-6 w-6 text-primary" />
+                                        <div><CardTitle className="text-base font-black uppercase tracking-tight">{isSG ? 'Departmental Burden Rank' : 'Practitioner Burden Rank'}</CardTitle><CardDescription className="text-[10px] uppercase tracking-widest font-black text-primary/60">Active caseload comparison</CardDescription></div>
                                     </div>
                                 </CardHeader>
                                 <CardContent className="p-0">
-                                    <div className="max-h-[350px] overflow-y-auto">
+                                    <div className="max-h-[450px] overflow-y-auto scrollbar-hide">
                                         <Table>
-                                            <TableHeader><TableRow className="bg-muted/30"><TableHead className="text-[10px] uppercase font-bold">Department/Practitioner</TableHead><TableHead className="text-center text-[10px] uppercase font-bold w-[80px]">Active</TableHead><TableHead className="text-right text-[10px] uppercase font-bold w-[100px]">Load Status</TableHead></TableRow></TableHeader>
+                                            <TableHeader><TableRow className="bg-muted/30 border-b-2"><TableHead className="text-[10px] uppercase font-black tracking-widest pl-6">Entity/Practitioner</TableHead><TableHead className="text-center text-[10px] uppercase font-black tracking-widest w-[100px]">Active</TableHead><TableHead className="text-right text-[10px] uppercase font-black tracking-widest w-[120px] pr-6">Status</TableHead></TableRow></TableHeader>
                                             <TableBody>
                                                 {(isSG ? executiveWorkloadAnalytics : groupWorkloadAnalytics).chartData.map(row => {
                                                     const isOverloaded = row.active >= (isSG ? OVERLOAD_THRESHOLD * 5 : OVERLOAD_THRESHOLD);
                                                     return (
-                                                        <TableRow key={row.name}>
-                                                            <TableCell className="text-xs font-bold truncate max-w-[150px]">{row.name}</TableCell>
-                                                            <TableCell className="text-center"><span className={cn("text-xs tabular-nums font-bold", isOverloaded ? "text-destructive" : "text-primary")}>{row.active}</span></TableCell>
-                                                            <TableCell className="text-right">{isOverloaded ? <Badge variant="destructive" className="text-[8px] uppercase tracking-tighter h-4 px-1.5 animate-pulse">High Load</Badge> : row.active > 0 ? <Badge variant="secondary" className="text-[8px] uppercase tracking-tighter h-4 px-1.5 bg-green-50 text-green-700 border-green-100">Healthy</Badge> : <span className="text-[9px] text-muted-foreground italic">Available</span>}</TableCell>
+                                                        <TableRow key={row.name} className="hover:bg-muted/20 transition-colors">
+                                                            <TableCell className="text-xs font-black uppercase tracking-tight pl-6">{row.name}</TableCell>
+                                                            <TableCell className="text-center"><span className={cn("text-sm tabular-nums font-black", isOverloaded ? "text-destructive" : "text-primary")}>{row.active}</span></TableCell>
+                                                            <TableCell className="text-right pr-6">{isOverloaded ? <Badge variant="destructive" className="text-[8px] font-black uppercase tracking-widest h-5 px-2 animate-pulse shadow-sm">High Burden</Badge> : row.active > 0 ? <Badge variant="secondary" className="text-[8px] font-black uppercase tracking-widest h-5 px-2 bg-green-50 text-green-700 border-green-100 shadow-sm">Healthy</Badge> : <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter opacity-50">Available</span>}</TableCell>
                                                         </TableRow>
                                                     )
                                                 })}
@@ -866,13 +865,13 @@ export default function PortalDashboard() {
                                 </CardContent>
                             </Card>
                         </div>
-                        <div className="space-y-4 min-w-0">
-                            <h3 className="text-sm font-bold flex items-center gap-2 text-destructive uppercase tracking-widest"><Zap className="h-4 w-4 animate-pulse" /> Stagnant Exception Report</h3>
+                        <div className="space-y-6 min-w-0">
+                            <h3 className="text-sm font-black flex items-center gap-3 text-destructive uppercase tracking-[0.2em] bg-red-50 w-fit px-4 py-2 rounded-lg border border-red-100"><Zap className="h-5 w-5 animate-pulse" /> Stagnant Exception Report</h3>
                             {stagnantOversightFiles.length > 0 ? (
-                                <div className="rounded-md border bg-background shadow-sm overflow-hidden min-w-0">
+                                <div className="rounded-2xl border bg-background shadow-sm overflow-hidden min-w-0 border-primary/10">
                                     <div className="w-full overflow-x-auto">
-                                        <Table className="min-w-[900px]">
-                                            <TableHeader><TableRow className="bg-muted/30"><TableHead className="w-[120px]">File No.</TableHead><TableHead>Group / Assignee</TableHead><TableHead>Current Milestone</TableHead><TableHead>Overall Progress</TableHead><TableHead>Activity Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                                        <Table className="min-w-[1000px]">
+                                            <TableHeader><TableRow className="bg-muted/30"><TableHead className="w-[150px] pl-6 font-black uppercase text-[10px] tracking-widest">File Number</TableHead><TableHead className="font-black uppercase text-[10px] tracking-widest">Assignee & Dept</TableHead><TableHead className="font-black uppercase text-[10px] tracking-widest">Current Milestone</TableHead><TableHead className="font-black uppercase text-[10px] tracking-widest">Case Progress</TableHead><TableHead className="font-black uppercase text-[10px] tracking-widest">Last Activity</TableHead><TableHead className="text-right pr-6 font-black uppercase text-[10px] tracking-widest">Action</TableHead></TableRow></TableHeader>
                                             <TableBody>
                                                 {stagnantOversightFiles.map(file => {
                                                     const completedCount = (file.milestones || []).filter(m => m.isCompleted).length;
@@ -881,13 +880,13 @@ export default function PortalDashboard() {
                                                     const lastAct = toDate(file.lastActivityAt || file.reportableDate || file.dateCreated);
                                                     const daysSince = lastAct ? differenceInDays(new Date(), lastAct) : 0;
                                                     return (
-                                                        <TableRow key={file.id} className="bg-red-50/20">
-                                                            <TableCell><span className="font-mono text-xs font-bold text-primary">{file.fileNumber}</span></TableCell>
-                                                            <TableCell><div className="flex flex-col max-w-[200px]"><span className="text-xs font-bold text-muted-foreground uppercase tracking-tighter truncate">{file.group || 'no group yet'}</span><span className="text-sm font-medium truncate">{file.assignedTo || 'Unassigned'}</span></div></TableCell>
-                                                            <TableCell><div className="flex items-center gap-2 max-w-[150px]"><Flag className="h-3 w-3 text-muted-foreground" /><span className="text-xs font-bold uppercase tracking-tight truncate">{(file.milestones || []).find(m => !m.isCompleted)?.title || "Execution"}</span></div></TableCell>
-                                                            <TableCell className="w-[200px]"><div className="space-y-1"><div className="flex items-center justify-between text-[10px] font-bold tabular-nums"><span>{completedCount}/{totalCount}</span><span>{Math.round(progress)}%</span></div><Progress value={progress} className="h-1.5" /></div></TableCell>
-                                                            <TableCell><Badge variant="destructive" className="bg-red-100 text-red-700 border-red-200 animate-pulse gap-1 px-1.5 py-0.5 whitespace-nowrap"><Zap className="h-3 w-3" /> Stagnant ({daysSince}d)</Badge></TableCell>
-                                                            <TableCell className="text-right"><Button variant="ghost" size="sm" asChild><Link href={`/portal/file/${file.id}`}>Review</Link></Button></TableCell>
+                                                        <TableRow key={file.id} className="bg-red-50/10 hover:bg-red-50/30 transition-colors border-b border-red-100/50">
+                                                            <TableCell className="pl-6"><span className="font-mono text-xs font-black text-primary px-2 py-1 rounded bg-muted/50">{file.fileNumber}</span></TableCell>
+                                                            <TableCell><div className="flex flex-col max-w-[250px]"><span className="text-[10px] font-black text-muted-foreground uppercase tracking-tighter truncate opacity-70">{file.group || 'no group yet'}</span><span className="text-sm font-bold text-foreground truncate">{file.assignedTo || 'Unassigned'}</span></div></TableCell>
+                                                            <TableCell><div className="flex items-center gap-2 max-w-[180px]"><Flag className="h-3.5 w-3.5 text-muted-foreground" /><span className="text-xs font-black uppercase tracking-tighter truncate">{(file.milestones || []).find(m => !m.isCompleted)?.title || "Execution"}</span></div></TableCell>
+                                                            <TableCell className="w-[220px]"><div className="space-y-1.5"><div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest tabular-nums text-primary/70"><span>{completedCount}/{totalCount}</span><span>{Math.round(progress)}%</span></div><Progress value={progress} className="h-2 rounded-full shadow-inner" /></div></TableCell>
+                                                            <TableCell><Badge variant="destructive" className="bg-red-100 text-red-700 border-red-200 animate-pulse gap-1.5 px-2 py-1 font-black uppercase text-[9px] tracking-widest shadow-sm"><Zap className="h-3 w-3" /> {daysSince} Days Idle</Badge></TableCell>
+                                                            <TableCell className="text-right pr-6"><Button variant="ghost" size="sm" asChild className="hover:bg-red-100 rounded-lg text-xs font-black uppercase tracking-widest"><Link href={`/portal/file/${file.id}`}>Review Case</Link></Button></TableCell>
                                                         </TableRow>
                                                     );
                                                 })}
@@ -896,49 +895,49 @@ export default function PortalDashboard() {
                                     </div>
                                 </div>
                             ) : (
-                                <div className="flex flex-col items-center justify-center py-24 border border-dashed rounded-xl bg-background shadow-inner text-center space-y-4"><div className="bg-green-50 p-4 rounded-full border border-green-100"><ThumbsUp className="h-10 w-10 text-green-600" /></div><div className="space-y-1"><h4 className="text-xl font-bold text-green-800">All Files Active</h4><p className="text-sm text-muted-foreground max-w-sm mx-auto">Great job! There are no stagnant files within oversight at this time.</p></div></div>
+                                <div className="flex flex-col items-center justify-center py-32 border-2 border-dashed rounded-3xl bg-background shadow-inner text-center space-y-6 border-green-100"><div className="bg-green-50 p-6 rounded-full border border-green-100 shadow-sm"><ThumbsUp className="h-12 w-12 text-green-600" /></div><div className="space-y-2"><h4 className="text-2xl font-black text-green-800 uppercase tracking-tight">System Status: Active</h4><p className="text-sm text-muted-foreground max-w-sm mx-auto font-medium">Excellent work! Every file within oversight has been updated within the last 14 days.</p></div></div>
                             )}
                         </div>
                     </section>
                 ) : viewMode === 'list' ? (
                     <>
-                        <div className="relative w-full max-w-2xl mx-auto px-2">
-                            <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                            <Input placeholder={isSG ? "Search all active & completed files..." : "Search caseload by file, subject, or colleague..."} className="pl-12 h-12 text-lg shadow-sm bg-background border-primary/10 w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                        <div className="relative w-full max-w-4xl mx-auto px-4">
+                            <Search className="absolute left-8 top-1/2 -translate-y-1/2 h-6 w-6 text-muted-foreground/50" />
+                            <Input placeholder={isSG ? "Search master file registry..." : "Search your assigned caseload by file, subject, or colleague..."} className="pl-16 h-16 text-xl shadow-lg bg-background border-primary/10 w-full rounded-2xl focus-visible:ring-primary/20 transition-shadow" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                         </div>
 
                         {!searchTerm && (
-                            <div className="grid gap-8">
+                            <div className="grid gap-10">
                                 {activeReminders.length > 0 && (
-                                    <section className="space-y-3 min-w-0">
-                                        <h3 className="text-xs font-bold flex items-center gap-2 text-primary uppercase tracking-widest">
-                                            <Clock className="h-4 w-4" /> Upcoming Deadlines & Reminders
+                                    <section className="space-y-5 min-w-0">
+                                        <h3 className="text-[10px] font-black flex items-center gap-3 text-primary uppercase tracking-[0.2em] bg-primary/5 w-fit px-4 py-2 rounded-lg border border-primary/10">
+                                            <Clock className="h-4 w-4" /> Upcoming Deadlines
                                         </h3>
-                                        <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                                        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                                             {activeReminders.map(reminder => {
                                                 const isOverdue = isPast(reminder.date) && !isToday(reminder.date);
                                                 return (
                                                     <Card key={reminder.id} className={cn(
-                                                        "border-l-4 shadow-sm hover:bg-muted/30 transition-colors cursor-pointer",
+                                                        "border-l-4 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer rounded-xl group",
                                                         isOverdue ? "border-l-destructive bg-destructive/5" : "border-l-primary bg-primary/5"
                                                     )} onClick={() => reminder.fileId && (window.location.href = `/portal/file/${reminder.fileId}`)}>
-                                                        <CardContent className="p-3 flex items-center justify-between gap-3">
-                                                            <div className="min-w-0 flex-1">
-                                                                <div className="flex items-center gap-2 mb-1">
-                                                                    {isOverdue && <Badge variant="destructive" className="h-4 text-[8px] uppercase px-1">Overdue</Badge>}
-                                                                    <span className={cn("text-[9px] font-mono font-bold uppercase", reminder.fileNumber === 'General' ? "text-purple-600" : "text-primary")}>
-                                                                        {reminder.fileNumber === 'General' ? 'Personal Task' : `File ${reminder.fileNumber}`}
+                                                        <CardContent className="p-4 flex items-start justify-between gap-4">
+                                                            <div className="min-w-0 flex-1 space-y-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    {isOverdue && <Badge variant="destructive" className="h-4 text-[8px] font-black uppercase px-1.5 tracking-widest animate-pulse">Overdue</Badge>}
+                                                                    <span className={cn("text-[9px] font-black font-mono uppercase tracking-widest", reminder.fileNumber === 'General' ? "text-purple-600" : "text-primary/70")}>
+                                                                        {reminder.fileNumber === 'General' ? 'Personal' : `File ${reminder.fileNumber}`}
                                                                     </span>
                                                                 </div>
-                                                                <p className="text-sm font-semibold truncate leading-tight">{reminder.text}</p>
-                                                                <p className="text-[10px] text-muted-foreground mt-1 font-medium">
+                                                                <p className="text-sm font-bold truncate leading-snug group-hover:text-primary transition-colors">{reminder.text}</p>
+                                                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter opacity-70">
                                                                     Due: {format(reminder.date, 'MMM d, p')}
                                                                 </p>
                                                             </div>
                                                             <Button 
                                                                 variant="ghost" 
                                                                 size="icon" 
-                                                                className="h-8 w-8 shrink-0 hover:bg-green-100 hover:text-green-700"
+                                                                className="h-9 w-9 shrink-0 rounded-full hover:bg-green-100 hover:text-green-700 transition-colors"
                                                                 onClick={(e) => {
                                                                     e.preventDefault();
                                                                     e.stopPropagation();
@@ -957,32 +956,32 @@ export default function PortalDashboard() {
                             </div>
                         )}
 
-                        <div className="space-y-8 min-w-0">
+                        <div className="space-y-12 min-w-0">
                             {isSG ? (
-                                <section className="space-y-4 min-w-0"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><h3 className="text-xs font-bold flex items-center gap-2 text-yellow-600 uppercase tracking-widest"><LayoutDashboard className="h-4 w-4" /> Master File Registry</h3><Badge variant="outline" className={cn("text-[10px] h-5 border-yellow-500 text-yellow-700 bg-yellow-50 uppercase font-bold w-fit", isActingSG && "border-amber-500 text-amber-700 bg-amber-50")}>{isActingSG ? 'Acting SG Oversight' : 'Executive Visibility'}</Badge></div><div className="grid gap-4 grid-cols-1 min-w-0">{paginatedAllFiles.map(file => <FileCard key={file.id} file={file} type="all" />)}</div>{totalPages > 1 && (<div className="flex flex-col sm:flex-row items-center justify-between border-t pt-6 gap-4"><p className="text-xs text-muted-foreground">Showing <span className="font-bold text-foreground">{(currentPage - 1) * PAGE_SIZE + 1}</span> to <span className="font-bold text-foreground">{Math.min(currentPage * PAGE_SIZE, caseloads.all.length)}</span> of <span className="font-bold text-foreground">{caseloads.all.length}</span> records</p><div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-8"><ChevronLeft className="h-4 w-4 mr-1" />Previous</Button><div className="text-xs font-bold px-3 py-1 bg-muted rounded-md border">Page {currentPage} of {totalPages}</div><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="h-8">Next<ChevronRightIcon className="h-4 w-4 ml-1" /></Button></div></div>)}</section>
+                                <section className="space-y-6 min-w-0"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4"><h3 className="text-sm font-black flex items-center gap-3 text-yellow-600 uppercase tracking-[0.2em]"><LayoutDashboard className="h-5 w-5" /> Master Registry Cluster</h3><Badge variant="outline" className={cn("text-[10px] h-6 px-3 border-yellow-500 text-yellow-700 bg-yellow-50 uppercase font-black tracking-widest rounded-full shadow-sm", isActingSG && "border-amber-500 text-amber-700 bg-amber-50")}>{isActingSG ? 'Acting SG Oversight Active' : 'Registry Leadership View'}</Badge></div><div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-w-0">{paginatedAllFiles.map(file => <FileCard key={file.id} file={file} type="all" />)}</div>{totalPages > 1 && (<div className="flex flex-col sm:flex-row items-center justify-between border-t pt-8 gap-6"><p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">Showing <span className="font-black text-foreground">{(currentPage - 1) * PAGE_SIZE + 1}</span> to <span className="font-black text-foreground">{Math.min(currentPage * PAGE_SIZE, caseloads.all.length)}</span> of <span className="font-black text-foreground">{caseloads.all.length}</span> records</p><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-10 px-4 rounded-xl font-bold uppercase text-[10px] tracking-widest"><ChevronLeft className="h-4 w-4 mr-2" />Prev</Button><div className="text-[10px] font-black px-4 py-2 bg-muted rounded-xl border tracking-widest">Page {currentPage} of {totalPages}</div><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="h-10 px-4 rounded-xl font-bold uppercase text-[10px] tracking-widest">Next<ChevronRightIcon className="h-4 w-4 ml-2" /></Button></div></div>)}</section>
                             ) : (
-                                <div className="space-y-8 min-w-0">
-                                    {caseloads.pinned.length > 0 && <section className="space-y-4"><h3 className="text-xs font-bold flex items-center gap-2 text-yellow-600 uppercase tracking-widest"><Star className="h-4 w-4 fill-current" /> Pinned & Urgent Cases</h3><div className="grid gap-4 grid-cols-1">{caseloads.pinned.map(file => <FileCard key={file.id} file={file} type="pinned" />)}</div></section>}
-                                    {caseloads.primary.length > 0 && <section className="space-y-4"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><h3 className="text-xs font-bold flex items-center gap-2 text-muted-foreground uppercase tracking-widest"><Briefcase className="h-4 w-4" /> My Primary Caseload</h3><Button variant="outline" size="sm" className="h-8 gap-2 border-primary/20 text-primary hover:bg-primary/5" onClick={handleGenerateStatusReport} disabled={isReporting}>{isReporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}Download My Status Report</Button></div><div className="grid gap-4 grid-cols-1">{caseloads.primary.map(file => <FileCard key={file.id} file={file} type="primary" />)}</div></section>}
-                                    {caseloads.collaborative.length > 0 && <section className="space-y-4"><h3 className="text-xs font-bold flex items-center gap-2 text-teal-600 uppercase tracking-widest"><Users className="h-4 w-4" /> Collaborative Team Cases</h3><div className="grid gap-4 grid-cols-1">{caseloads.collaborative.map(file => <FileCard key={file.id} file={file} type="collaborative" />)}</div></section>}
-                                    {caseloads.action.length > 0 && <section className="space-y-4"><h3 className="text-xs font-bold flex items-center gap-2 text-muted-foreground uppercase tracking-widest"><UserCheck className="h-4 w-4" /> Files on My Desk</h3><div className="grid gap-4 grid-cols-1">{caseloads.action.map(file => <FileCard key={file.id} file={file} type="action" />)}</div></section>}
-                                    {caseloads.oversight.length > 0 && <section className="space-y-4"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2"><h3 className="text-xs font-bold flex items-center gap-2 text-purple-600 uppercase tracking-widest"><Users className="h-4 w-4" /> Group Oversight ({attorney.group || 'no group yet'})</h3>{attorney.isActingGroupHead ? <Badge className="bg-blue-500 text-white text-[9px] uppercase font-bold w-fit">Acting Group Head View</Badge> : <Badge variant="secondary" className="bg-purple-100 text-purple-700 text-[9px] uppercase font-bold w-fit">Group Head View</Badge>}</div><div className="grid gap-4 grid-cols-1">{caseloads.oversight.map(file => <FileCard key={file.id} file={file} type="oversight" />)}</div></section>}
-                                    {caseloads.historical.length > 0 && <section className="space-y-4 pt-4"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2"><h3 className="text-xs font-bold flex items-center gap-2 text-muted-foreground uppercase tracking-widest"><History className="h-4 w-4" /> My Previous Assignments (Historical)</h3><Badge variant="secondary" className="bg-muted text-muted-foreground text-[9px] uppercase font-bold w-fit border-none">Read-Only Access</Badge></div><div className="grid gap-4 grid-cols-1">{caseloads.historical.map(file => <FileCard key={file.id} file={file} type="historical" />)}</div></section>}
+                                <div className="space-y-12 min-w-0">
+                                    {caseloads.pinned.length > 0 && <section className="space-y-6"><h3 className="text-xs font-black flex items-center gap-3 text-yellow-600 uppercase tracking-[0.2em] bg-yellow-50 w-fit px-4 py-2 rounded-lg border border-yellow-100"><Star className="h-5 w-5 fill-current" /> High Priority Cluster</h3><div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">{caseloads.pinned.map(file => <FileCard key={file.id} file={file} type="pinned" />)}</div></section>}
+                                    {caseloads.primary.length > 0 && <section className="space-y-6"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4"><h3 className="text-xs font-black flex items-center gap-3 text-primary uppercase tracking-[0.2em]"><Briefcase className="h-5 w-5" /> Primary Caseload</h3><Button variant="outline" size="sm" className="h-9 gap-2 border-primary/20 text-primary hover:bg-primary/5 rounded-lg font-bold text-[10px] uppercase tracking-widest" onClick={handleGenerateStatusReport} disabled={isReporting}>{isReporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}Download Progress Report</Button></div><div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">{caseloads.primary.map(file => <FileCard key={file.id} file={file} type="primary" />)}</div></section>}
+                                    {caseloads.collaborative.length > 0 && <section className="space-y-6"><h3 className="text-xs font-black flex items-center gap-3 text-teal-600 uppercase tracking-[0.2em] border-b pb-4"><Users className="h-5 w-5" /> Team Assignments</h3><div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">{caseloads.collaborative.map(file => <FileCard key={file.id} file={file} type="collaborative" />)}</div></section>}
+                                    {caseloads.action.length > 0 && <section className="space-y-6"><h3 className="text-xs font-black flex items-center gap-3 text-blue-600 uppercase tracking-[0.2em] border-b pb-4"><UserCheck className="h-5 w-5" /> Possession Queue</h3><div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">{caseloads.action.map(file => <FileCard key={file.id} file={file} type="action" />)}</div></section>}
+                                    {caseloads.oversight.length > 0 && <section className="space-y-6"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4"><h3 className="text-xs font-black flex items-center gap-3 text-purple-600 uppercase tracking-[0.2em]"><ShieldCheck className="h-5 w-5" /> Group Oversight Hub</h3>{attorney.isActingGroupHead ? <Badge className="bg-blue-500 text-white text-[9px] uppercase font-black tracking-widest px-3 h-6 rounded-full shadow-sm">Acting Group Head View</Badge> : <Badge variant="secondary" className="bg-purple-100 text-purple-700 text-[9px] uppercase font-black tracking-widest px-3 h-6 rounded-full shadow-sm border-purple-200">Group Head Dashboard</Badge>}</div><div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">{caseloads.oversight.map(file => <FileCard key={file.id} file={file} type="oversight" />)}</div></section>}
+                                    {caseloads.historical.length > 0 && <section className="space-y-6 pt-6"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4"><h3 className="text-xs font-black flex items-center gap-3 text-muted-foreground uppercase tracking-[0.2em]"><History className="h-5 w-5" /> Historical Insight</h3><Badge variant="secondary" className="bg-muted text-muted-foreground text-[9px] uppercase font-black tracking-widest px-3 h-6 rounded-full border-none opacity-70">Read-Only Archive</Badge></div><div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">{caseloads.historical.map(file => <FileCard key={file.id} file={file} type="historical" />)}</div></section>}
                                 </div>
                             )}
-                            {(caseloads.completed.length > 0 && !isSG) && <section className="space-y-4 pt-8 border-t"><h3 className="text-xs font-bold flex items-center gap-2 text-green-600 uppercase tracking-widest"><Archive className="h-4 w-4" /> Completed & Resolved Cases</h3><div className="grid gap-4 grid-cols-1">{caseloads.completed.map(file => <FileCard key={file.id} file={file} type="completed" />)}</div></section>}
-                            {availableFiles.length === 0 && caseloads.completed.length === 0 && caseloads.historical.length === 0 && <div className="text-center py-24 border border-dashed rounded-xl bg-background shadow-inner px-4"><AlertCircle className="h-12 w-12 text-muted-foreground/20 mx-auto mb-4" /><h4 className="text-xl font-semibold text-muted-foreground">{searchTerm ? 'No results found' : 'Registry is empty'}</h4><p className="text-sm text-muted-foreground max-w-xs mx-auto mt-2">Files will appear here once registered or assigned.</p></div>}
+                            {(caseloads.completed.length > 0 && !isSG) && <section className="space-y-6 pt-12 border-t"><h3 className="text-xs font-black flex items-center gap-3 text-green-600 uppercase tracking-[0.2em] border-b pb-4"><Archive className="h-5 w-5" /> Resolved Cases</h3><div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">{caseloads.completed.map(file => <FileCard key={file.id} file={file} type="completed" />)}</div></section>}
+                            {availableFiles.length === 0 && caseloads.completed.length === 0 && caseloads.historical.length === 0 && <div className="text-center py-32 border-2 border-dashed rounded-3xl bg-background shadow-inner px-6"><div className="bg-muted/50 p-6 rounded-full w-fit mx-auto shadow-inner mb-6"><AlertCircle className="h-12 w-12 text-muted-foreground opacity-20" /></div><h4 className="text-2xl font-black text-muted-foreground uppercase tracking-tight">{searchTerm ? 'No matches found' : 'Workspace Empty'}</h4><p className="text-sm text-muted-foreground max-w-xs mx-auto mt-3 font-medium">Your assigned records will appear here once registered by the Registry or linked to your profile.</p></div>}
                         </div>
                     </>
                 ) : (
-                    <Card className="shadow-sm overflow-hidden">
-                        <CardHeader className="flex flex-col sm:flex-row items-center justify-between bg-muted/30 border-b gap-4"><div className="text-center sm:text-left"><CardTitle className="text-xl">{format(currentMonth, 'MMMM yyyy')}</CardTitle><CardDescription>Tracking {calendarEvents.length} active events</CardDescription></div><div className="flex items-center gap-2"><Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}><ChevronLeft className="h-4 w-4" /></Button><Button variant="outline" size="sm" onClick={() => setCurrentMonth(new Date())}>Today</Button><Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}><ChevronRightIcon className="h-4 w-4" /></Button></div></CardHeader>
-                        <CardContent className="p-0 overflow-x-auto"><div className="min-w-[600px]"><div className="grid grid-cols-7 border-b">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (<div key={day} className="p-2 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-muted/10">{day}</div>))}</div><div className="grid grid-cols-7">{calendarDays.map((day, idx) => { const dayEvents = calendarEvents.filter(e => isSameDay(e.date, day)); const isCurrentMonth = isSameMonth(day, monthStart); const isTodayDate = isToday(day); return ( <div key={day.toString()} className={cn("min-h-[120px] p-2 border-r border-b relative group hover:bg-primary/5 transition-colors min-w-0", !isCurrentMonth && "bg-muted/5 opacity-40", idx % 7 === 6 && "border-r-0")}><div className="flex justify-between items-start mb-2"><span className={cn("text-xs font-semibold rounded-full h-6 w-6 flex items-center justify-center", isTodayDate && "bg-primary text-primary-foreground")}>{format(day, 'd')}</span>{isCurrentMonth && (<Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handleOpenCreateDialog(day)}><Plus className="h-3 w-3" /></Button>)}</div><div className="space-y-1 overflow-hidden">{dayEvents.slice(0, 3).map(event => ( <div key={event.id} className={cn( "text-[9px] px-1.5 py-0.5 rounded border truncate leading-tight font-medium mb-0.5 cursor-pointer hover:brightness-95 transition-all", event.type === 'court' ? "bg-blue-50 text-blue-700 border-blue-100" : isPast(event.date) && !isToday(event.date) ? "bg-red-50 text-red-700 border-red-100" : "bg-green-50 text-green-700 border-green-100" )} onClick={() => { if (event.fileId) { window.location.href = `/portal/file/${event.fileId}`; } else { handleToggleReminder('General', event.id, true); } }} title={`${event.fileNumber}: ${event.text}`}><span className="font-bold mr-1">{event.fileNumber}:</span>{event.text}</div> ))}{dayEvents.length > 3 && <div className="text-[8px] text-center font-bold text-muted-foreground">+ {dayEvents.length - 3} more</div>}</div></div> ); })}</div></div></CardContent>
+                    <Card className="shadow-xl overflow-hidden rounded-2xl border-primary/10">
+                        <CardHeader className="flex flex-col sm:flex-row items-center justify-between bg-muted/30 border-b p-6 gap-6"><div className="text-center sm:text-left"><CardTitle className="text-2xl font-black tracking-tight uppercase">{format(currentMonth, 'MMMM yyyy')}</CardTitle><CardDescription className="font-bold uppercase tracking-widest text-[10px] text-primary/60">Tracking {calendarEvents.length} active legal events</CardDescription></div><div className="flex items-center gap-3"><Button variant="outline" size="icon" className="h-10 w-10 rounded-xl" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}><ChevronLeft className="h-5 w-5" /></Button><Button variant="outline" size="sm" className="h-10 px-6 rounded-xl font-black uppercase text-[10px] tracking-widest" onClick={() => setCurrentMonth(new Date())}>Today</Button><Button variant="outline" size="icon" className="h-10 w-10 rounded-xl" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}><ChevronRightIcon className="h-5 w-5" /></Button></div></CardHeader>
+                        <CardContent className="p-0 overflow-x-auto"><div className="min-w-[800px]"><div className="grid grid-cols-7 border-b">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (<div key={day} className="p-3 text-center text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground bg-muted/10 border-r last:border-r-0">{day}</div>))}</div><div className="grid grid-cols-7">{calendarDays.map((day, idx) => { const dayEvents = calendarEvents.filter(e => isSameDay(e.date, day)); const isCurrentMonth = isSameMonth(day, monthStart); const isTodayDate = isToday(day); return ( <div key={day.toString()} className={cn("min-h-[150px] p-3 border-r border-b relative group hover:bg-primary/[0.02] transition-colors min-w-0", !isCurrentMonth && "bg-muted/5 opacity-40", idx % 7 === 6 && "border-r-0")}><div className="flex justify-between items-start mb-3"><span className={cn("text-xs font-black rounded-lg h-7 w-7 flex items-center justify-center transition-colors shadow-sm", isTodayDate ? "bg-primary text-primary-foreground" : "bg-muted/50 text-foreground")}>{format(day, 'd')}</span>{isCurrentMonth && (<Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-primary/10 text-primary" onClick={() => handleOpenCreateDialog(day)}><Plus className="h-4 w-4" /></Button>)}</div><div className="space-y-1.5 overflow-hidden">{dayEvents.slice(0, 4).map(event => ( <div key={event.id} className={cn( "text-[9px] px-2 py-1 rounded-lg border-l-2 truncate leading-tight font-black uppercase tracking-tighter cursor-pointer hover:brightness-95 transition-all shadow-sm", event.type === 'court' ? "bg-blue-50 text-blue-700 border-blue-200 border-l-blue-600" : isPast(event.date) && !isToday(event.date) ? "bg-red-50 text-red-700 border-red-200 border-l-red-600" : "bg-green-50 text-green-700 border-green-200 border-l-green-600" )} onClick={() => { if (event.fileId) { window.location.href = `/portal/file/${event.fileId}`; } else { handleToggleReminder('General', event.id, true); } }} title={`${event.fileNumber}: ${event.text}`}><span className="opacity-60 mr-1">{event.fileNumber}:</span>{event.text}</div> ))}{dayEvents.length > 4 && <div className="text-[8px] text-center font-black text-muted-foreground uppercase tracking-widest pt-1">+ {dayEvents.length - 4} more</div>}</div></div> ); })}</div></div></CardContent>
                     </Card>
                 )}
             </main>
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                <DialogContent className="w-[95vw] sm:max-w-lg md:max-w-xl p-6 overflow-visible"><DialogHeader><DialogTitle>Set Deadline Reminder</DialogTitle><DialogDescription>Schedule a task for {selectedDateForReminder ? format(selectedDateForReminder, 'PPP') : 'selected date'}.</DialogDescription></DialogHeader><div className="grid gap-4 py-4 [&_*]:min-w-0 overflow-visible"><div className="space-y-2"><Label>Task Description</Label><Input placeholder="e.g. File Statement of Case" value={reminderText} onChange={(e) => setReminderText(e.target.value)} /></div><div className="space-y-2 min-w-0 overflow-visible"><Label>Activity / Case File</Label><div className="min-w-0 w-full overflow-visible"><Combobox options={fileOptions} value={reminderFileNumber} onChange={reminderFileNumber => setReminderFileNumber(reminderFileNumber)} placeholder="Select case or general activity..." searchPlaceholder="Search by file number or subject..." /></div></div><div className="space-y-2"><Label>Time</Label><Input type="time" value={reminderTime} onChange={(e) => setReminderTime(e.target.value)} /></div></div><DialogFooter className="flex flex-col sm:flex-row gap-3"><Button variant="outline" onClick={() => setIsCreateDialogOpen(false)} className="w-full sm:w-auto order-2 sm:order-1">Cancel</Button><Button onClick={handleCreateReminder} disabled={isSubmitting || !reminderFileNumber || !reminderText} className="w-full sm:w-auto order-1 sm:order-2">{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save Reminder</Button></DialogFooter></DialogContent>
+                <DialogContent className="w-[95vw] sm:max-w-lg md:max-w-xl p-8 rounded-2xl overflow-visible"><DialogHeader><DialogTitle className="text-xl font-black uppercase tracking-tight">Set Case Deadline</DialogTitle><DialogDescription className="font-medium text-muted-foreground">Schedule a legal task or reminder for {selectedDateForReminder ? format(selectedDateForReminder, 'PPP') : 'the selected date'}.</DialogDescription></DialogHeader><div className="grid gap-6 py-6 [&_*]:min-w-0 overflow-visible"><div className="space-y-2"><Label className="text-[10px] font-black uppercase tracking-widest text-primary">Task Description</Label><Input placeholder="e.g. File Statement of Case" value={reminderText} onChange={(e) => setReminderText(e.target.value)} className="h-12 text-sm font-bold rounded-xl bg-muted/20 border-none focus-visible:ring-primary/20" /></div><div className="space-y-2 min-w-0 overflow-visible"><Label className="text-[10px] font-black uppercase tracking-widest text-primary">Associated Activity / Case File</Label><div className="min-w-0 w-full overflow-visible"><Combobox options={fileOptions} value={reminderFileNumber} onChange={reminderFileNumber => setReminderFileNumber(reminderFileNumber)} placeholder="Select case or personal activity..." searchPlaceholder="Search by file number or subject..." /></div></div><div className="space-y-2"><Label className="text-[10px] font-black uppercase tracking-widest text-primary">Due Time</Label><Input type="time" value={reminderTime} onChange={(e) => setReminderTime(e.target.value)} className="h-12 text-sm font-bold rounded-xl bg-muted/20 border-none" /></div></div><DialogFooter className="flex flex-col sm:flex-row gap-4 pt-4 border-t"><Button variant="ghost" onClick={() => setIsCreateDialogOpen(false)} className="w-full sm:w-auto order-2 sm:order-1 font-bold uppercase text-[10px] tracking-widest">Discard</Button><Button onClick={handleCreateReminder} disabled={isSubmitting || !reminderFileNumber || !reminderText} className="w-full sm:w-auto order-1 sm:order-2 h-12 px-8 rounded-xl font-black uppercase text-[10px] tracking-[0.2em] shadow-lg shadow-primary/20 transition-all active:scale-95">{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save Reminder</Button></DialogFooter></DialogContent>
             </Dialog>
         </div>
     );
