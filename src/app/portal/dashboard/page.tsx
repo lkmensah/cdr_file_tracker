@@ -237,7 +237,12 @@ export default function PortalDashboard() {
             const isLead = file.assignedTo?.toLowerCase().trim() === myName;
             const isCoAssignee = file.coAssignees?.some(name => name.toLowerCase().trim() === myName);
             
-            const movements = [...(file.movements || [])].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0));
+            const movements = [...(file.movements || [])].sort((a,b) => {
+                const dateA = toDate(a.date)?.getTime() || 0;
+                const dateB = toDate(b.date)?.getTime() || 0;
+                if (dateB !== dateA) return dateB - dateA;
+                return b.id.localeCompare(a.id);
+            });
             const latestMovement = movements[0];
             const isAtMyDeskUnconfirmed = latestMovement?.movedTo?.toLowerCase().trim() === myName && !latestMovement.receivedAt;
             const isAtMyDeskConfirmed = latestMovement?.movedTo?.toLowerCase().trim() === myName && !!latestMovement.receivedAt;
@@ -286,8 +291,12 @@ export default function PortalDashboard() {
         e.stopPropagation();
         if (!attorney) return;
 
-        const movements = [...(file.movements || [])].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0));
-        const latest = movements[0];
+        const latest = [...(file.movements || [])].sort((a,b) => {
+            const dateA = toDate(a.date)?.getTime() || 0;
+            const dateB = toDate(b.date)?.getTime() || 0;
+            if (dateB !== dateA) return dateB - dateA;
+            return b.id.localeCompare(a.id);
+        })[0];
         if (!latest) return;
 
         const formData = new FormData();
@@ -308,7 +317,12 @@ export default function PortalDashboard() {
         const confirmations = caseloads.arrivals
             .filter(f => selectedArrivalIds.has(f.id))
             .map(f => {
-                const latest = [...(f.movements || [])].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0))[0];
+                const latest = [...(f.movements || [])].sort((a,b) => {
+                    const dateA = toDate(a.date)?.getTime() || 0;
+                    const dateB = toDate(b.date)?.getTime() || 0;
+                    if (dateB !== dateA) return dateB - dateA;
+                    return b.id.localeCompare(a.id);
+                })[0];
                 return { fileNumber: f.fileNumber, movementId: latest.id };
             });
 
@@ -328,7 +342,12 @@ export default function PortalDashboard() {
         let registryPhone = '233244000000';
         const firstFile = allArrivals[0];
         if (firstFile) {
-            const latest = [...(firstFile.movements || [])].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0))[0];
+            const latest = [...(firstFile.movements || [])].sort((a,b) => {
+                const dateA = toDate(a.date)?.getTime() || 0;
+                const dateB = toDate(b.date)?.getTime() || 0;
+                if (dateB !== dateA) return dateB - dateA;
+                return b.id.localeCompare(a.id);
+            })[0];
             if (latest?.notifiedByPhone) registryPhone = latest.notifiedByPhone.replace(/\D/g, '');
         }
 
@@ -421,7 +440,12 @@ export default function PortalDashboard() {
         allFiles.forEach(file => {
             const isLead = file.assignedTo?.toLowerCase().trim() === myName;
             const isCoAssignee = file.coAssignees?.some(name => name.toLowerCase().trim() === myName);
-            const movements = [...(file.movements || [])].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0));
+            const movements = [...(file.movements || [])].sort((a,b) => {
+                const dateA = toDate(a.date)?.getTime() || 0;
+                const dateB = toDate(b.date)?.getTime() || 0;
+                if (dateB !== dateA) return dateB - dateA;
+                return b.id.localeCompare(a.id);
+            });
             const latestMovement = movements[0];
             const isAtMyDesk = latestMovement?.movedTo?.toLowerCase().trim() === myName;
             const fileGroup = (file.group || 'no group yet').toLowerCase().trim();
@@ -462,12 +486,18 @@ export default function PortalDashboard() {
                 }
             });
             
-            const movements = [...(file.movements || [])].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0))[0];
-            if (movements) {
-                const d = toDate(movements.date);
+            const movements = [...(file.movements || [])].sort((a,b) => {
+                const dateA = toDate(a.date)?.getTime() || 0;
+                const dateB = toDate(b.date)?.getTime() || 0;
+                if (dateB !== dateA) return dateB - dateA;
+                return b.id.localeCompare(a.id);
+            });
+            const latest = movements[0];
+            if (latest) {
+                const d = toDate(latest.date);
                 if (d && isAfter(d, referencePoint) && !isAfter(d, now)) {
-                    if (isSG || (movements.movedTo.toLowerCase().trim() === myName && !movements.receivedAt)) {
-                        notes.push({ id: movements.id, fileId: file.id, fileNumber: file.fileNumber, message: isSG ? `File moved to ${movements.movedTo}` : `File moved to your desk`, timestamp: d, type: 'movement' });
+                    if (isSG || (latest.movedTo.toLowerCase().trim() === myName && !latest.receivedAt)) {
+                        notes.push({ id: latest.id, fileId: file.id, fileNumber: file.fileNumber, message: isSG ? `File moved to ${latest.movedTo}` : `File moved to your desk`, timestamp: d, type: 'movement' });
                     }
                 }
             }
@@ -518,8 +548,12 @@ export default function PortalDashboard() {
             if (isSG) return true;
             const isLead = file.assignedTo?.toLowerCase().trim() === myName;
             const isCoAssignee = file.coAssignees?.some(name => name.toLowerCase().trim() === myName);
-            const movements = [...(file.movements || [])].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0));
-            const latestMovement = movements[0];
+            const latestMovement = [...(file.movements || [])].sort((a,b) => {
+                const dateA = toDate(a.date)?.getTime() || 0;
+                const dateB = toDate(b.date)?.getTime() || 0;
+                if (dateB !== dateA) return dateB - dateA;
+                return b.id.localeCompare(a.id);
+            })[0];
             const isAtMyDesk = latestMovement?.movedTo?.toLowerCase().trim() === myName;
             const fileGroup = (file.group || 'no group yet').toLowerCase().trim();
             const isInMyGroup = (attorney.isGroupHead || attorney.isActingGroupHead) && !!myGroup && myGroup !== 'no group yet' && fileGroup === myGroup;
@@ -650,7 +684,12 @@ export default function PortalDashboard() {
                 doc.setTextColor(0, 0, 0);
 
                 const tableData = files.map(file => {
-                    const movements = [...(file.movements || [])].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0));
+                    const movements = [...(file.movements || [])].sort((a,b) => {
+                        const dateA = toDate(a.date)?.getTime() || 0;
+                        const dateB = toDate(b.date)?.getTime() || 0;
+                        if (dateB !== dateA) return dateB - dateA;
+                        return b.id.localeCompare(a.id);
+                    });
                     const latest = movements[0];
                     const isAtMyDesk = latest?.movedTo?.toLowerCase().trim() === myName.toLowerCase().trim();
                     const level = isAtMyDesk ? 'AT MY DESK' : (latest?.movedTo || 'REGISTRY');
@@ -696,7 +735,12 @@ export default function PortalDashboard() {
     const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
 
     const FileCard = ({ file, type }: { file: CorrespondenceFile, type: 'pinned' | 'primary' | 'collaborative' | 'action' | 'oversight' | 'completed' | 'historical' | 'all' | 'arrival' }) => {
-        const movements = [...(file.movements || [])].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0));
+        const movements = [...(file.movements || [])].sort((a,b) => {
+            const dateA = toDate(a.date)?.getTime() || 0;
+            const dateB = toDate(b.date)?.getTime() || 0;
+            if (dateB !== dateA) return dateB - dateA;
+            return b.id.localeCompare(a.id);
+        });
         const latestMovement = movements[0];
         const isPendingReceipt = latestMovement?.movedTo?.toLowerCase().trim() === attorney.fullName.toLowerCase().trim() && !latestMovement.receivedAt;
         const isWithMe = latestMovement?.movedTo?.toLowerCase().trim() === attorney.fullName.toLowerCase().trim() && !!latestMovement.receivedAt;
