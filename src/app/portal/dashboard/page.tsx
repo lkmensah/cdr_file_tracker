@@ -346,7 +346,7 @@ export default function PortalDashboard() {
     }, [allFiles, attorney, isSG]);
 
     const notifications = React.useMemo(() => {
-        if (!notifications || !attorney) return [];
+        if (!myRelatedFiles || !attorney) return [];
         const notes: { id: string; fileId: string; fileNumber: string; message: string; timestamp: Date; type: 'communication' | 'folio' | 'draft' | 'movement' }[] = [];
         const now = new Date();
         const last24h = subHours(now, 24);
