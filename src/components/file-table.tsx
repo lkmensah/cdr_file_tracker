@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -19,7 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { MoreHorizontal, FileText, ChevronDown, ChevronRight, FilePlus2, Send, Pencil, CheckCircle2, Truck, Clock, Trash2, FolderCheck, FolderOpen, Files, Sparkles, HandIcon } from 'lucide-react';
+import { MoreHorizontal, FileText, ChevronDown, ChevronRight, FilePlus2, Send, Pencil, CheckCircle2, Truck, Clock, Trash2, FolderCheck, FolderOpen, Files, MessageCircle, HandIcon } from 'lucide-react';
 import { FileDetailDialog } from './file-detail-dialog';
 import { NewCorrespondenceDialog } from './new-correspondence-dialog';
 import { cn, truncate } from '@/lib/utils';
@@ -29,7 +30,7 @@ import { BatchPickupDialog } from './batch-pickup-dialog';
 import { format, isAfter, subHours } from 'date-fns';
 import { useDoc, useFirestore, useMemoFirebase, useCollection } from '@/firebase';
 import { doc, collection } from 'firebase/firestore';
-import { confirmFileReceipt, deleteFile, toggleFileStatus, markFileAsViewed } from '@/app/actions';
+import { deleteFile, toggleFileStatus, markFileAsViewed } from '@/app/actions';
 import { useAuthAction } from '@/hooks/use-auth-action';
 import { useToast } from '@/hooks/use-toast';
 import { useProfile } from './auth-provider';
@@ -68,18 +69,8 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
   const [isPickupOpen, setIsPickupOpen] = React.useState(false);
   const [expandedFiles, setExpandedFiles] = React.useState<Set<string>>(new Set());
 
-  const activeFiles = React.useMemo(() => files.filter(f => f.status !== 'Completed'), [files]);
-
   const attorneysQuery = useMemoFirebase(() => firestore ? collection(firestore, 'attorneys') : null, [firestore]);
   const { data: attorneys } = useCollection<Attorney>(attorneysQuery);
-
-  const { exec: authConfirmReceipt, isLoading: isConfirming } = useAuthAction(confirmFileReceipt, {
-    onSuccess: (result) => {
-        if (result && result.message?.includes('Success')) {
-            toast({ title: "Receipt Confirmed" });
-        }
-    }
-  });
 
   const { exec: authToggleStatus, isLoading: isTogglingStatus } = useAuthAction(toggleFileStatus, {
     onSuccess: (result) => {
@@ -156,25 +147,27 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
     }
   }
 
-  const handleConfirmReceipt = async (file: CorrespondenceFile, movementId: string) => {
-    const formData = new FormData();
-    formData.append('fileNumber', file.fileNumber);
-    formData.append('movementId', movementId);
-    const result = await authConfirmReceipt(formData);
+  const handleNotifyWhatsApp = (file: CorrespondenceFile) => {
+    const movements = Array.isArray(file.movements) ? file.movements : [];
+    const latest = [...movements].sort((a, b) => {
+        const dateA = toDate(a.date)?.getTime() || 0;
+        const dateB = toDate(b.date)?.getTime() || 0;
+        if (dateB !== dateA) return dateB - dateA;
+        return b.id.localeCompare(a.id);
+    })[0];
 
-    if (result && result.message?.includes('Success')) {
-        const movements = Array.isArray(file.movements) ? file.movements : [];
-        const movement = movements.find(m => m.id === movementId);
-        if (movement) {
-            const destination = movement.movedTo;
-            const targetAttorney = attorneys?.find(a => a.fullName.toLowerCase() === destination.toLowerCase());
-            if (targetAttorney?.phoneNumber) {
-                const truncatedSubject = truncate(file.subject, 60);
-                const message = encodeURIComponent(
-                    `Hello ${targetAttorney.fullName},\n\nThe following file(s) have been delivered to your desk and confirmed received in the CDR_File Tracker system:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease verify physical receipt.\n\nThank you.`
-                );
-                window.open(`https://wa.me/${targetAttorney.phoneNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
-            }
+    if (latest) {
+        const destination = latest.movedTo;
+        const targetAttorney = attorneys?.find(a => a.fullName.toLowerCase() === destination.toLowerCase());
+        if (targetAttorney?.phoneNumber) {
+            const truncatedSubject = truncate(file.subject, 60);
+            const message = encodeURIComponent(
+                `Hello ${targetAttorney.fullName},\n\nThe following physical file has been delivered to your desk:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease log in to your Attorney Portal immediately to verify and confirm receipt of the physical folder.\n\nThank you.`
+            );
+            window.open(`https://wa.me/${targetAttorney.phoneNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
+            toast({ title: "WhatsApp Alert Opened" });
+        } else {
+            toast({ variant: 'destructive', title: "No Contact Info", description: `${destination} has no registered phone number.` });
         }
     }
   };
@@ -354,11 +347,11 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
                             </DropdownMenuItem>
                             {latestMovement && !latestMovement.receivedAt && !isRegistry && (
                                 <DropdownMenuItem 
-                                    onClick={() => handleConfirmReceipt(file, latestMovement.id)} 
-                                    disabled={isConfirming || isCompleted}
+                                    onClick={() => handleNotifyWhatsApp(file)} 
+                                    disabled={isCompleted}
                                 >
-                                    <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
-                                    Confirm Receipt
+                                    <MessageCircle className="mr-2 h-4 w-4 text-green-600" />
+                                    Notify via WhatsApp
                                 </DropdownMenuItem>
                             )}
                             <DropdownMenuItem 

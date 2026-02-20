@@ -502,6 +502,22 @@ export async function confirmFileReceipt(
     }
 }
 
+export async function batchConfirmReceipt(
+    clientToken: string,
+    confirmations: { fileNumber: string, movementId: string }[]
+): Promise<{ message: string }> {
+    const { fullName } = await verifyAndGetUser(clientToken);
+    try {
+        await db.batchConfirmReceipt(confirmations, fullName);
+        await logUserActivity(fullName, 'BATCH_CONFIRM_RECEIPT', `Confirmed physical receipt of ${confirmations.length} files.`);
+        revalidatePath('/files');
+        revalidatePath('/portal/dashboard');
+        return { message: 'Success! Possession confirmed.' };
+    } catch (error) {
+        return { message: 'Failed to confirm receipt.' };
+    }
+}
+
 export async function assignToFile(
     clientToken: string,
     formData: FormData

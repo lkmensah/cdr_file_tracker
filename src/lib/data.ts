@@ -531,6 +531,32 @@ export const confirmFileReceipt = async (fileNumber: string, movementId: string,
     return { success: true };
 };
 
+export const batchConfirmReceipt = async (confirmations: { fileNumber: string, movementId: string }[], receivedBy: string) => {
+    const firestore = getFirestore(initializeAdmin());
+    const now = new Date();
+    
+    // Process in chunks of 450 to stay under batch limit
+    const CHUNK_SIZE = 450;
+    for (let i = 0; i < confirmations.length; i += CHUNK_SIZE) {
+        const chunk = confirmations.slice(i, i + CHUNK_SIZE);
+        const batch = firestore.batch();
+        
+        for (const conf of chunk) {
+            const snap = await getFileCollectionRef().where('fileNumber', '==', conf.fileNumber.trim()).limit(1).get();
+            if (!snap.empty) {
+                const doc = snap.docs[0];
+                const movements = (doc.data().movements || []).map((m: any) => {
+                    if (m.id === conf.movementId) return { ...m, receivedAt: now, receivedBy: receivedBy.trim() };
+                    return m;
+                });
+                batch.update(doc.ref, { movements, lastActivityAt: FieldValue.serverTimestamp() });
+            }
+        }
+        await batch.commit();
+    }
+    return { success: true };
+};
+
 export const createArchiveRecord = async (data: any) => {
     const docRef = await getArchiveCollectionRef().add(data);
     return { id: docRef.id };
