@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -341,6 +342,12 @@ export default function PortalFileDetail() {
         }
     }
 
+    const handleReportDiscrepancy = () => {
+        const msg = encodeURIComponent(`Hello Registry,\n\nI am reporting an inspection issue with file *${file.fileNumber}* (${file.subject}). It is listed as arriving at my desk, but I cannot verify its physical presence or it has been sent to me in error.\n\nPlease verify.`);
+        window.open(`https://wa.me/233244000000?text=${msg}`, '_blank');
+        toast({ title: 'Issue Reported' });
+    }
+
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = e.target.files?.[0];
         if (!selectedFile || !file || !attorney || !user) return;
@@ -383,7 +390,23 @@ export default function PortalFileDetail() {
                 </div>
                 <div className="ml-auto flex items-center gap-2">
                     {!isCompleted && !isSG && !isHistoricalOnly && (<Button variant="ghost" size="sm" className={cn("h-8 gap-2", isPinned ? "text-yellow-600 bg-yellow-50" : "text-muted-foreground")} onClick={handleTogglePin}><Pin className={cn("h-4 w-4", isPinned && "fill-current")} /><span className="hidden sm:inline">{isPinned ? 'Pinned' : 'Pin Case'}</span></Button>)}
-                    {isLead && !isCompleted && (<AlertDialog><AlertDialogTrigger asChild><Button variant="outline" size="sm" className="h-8 border-green-200 text-green-700 hover:bg-green-50"><CheckCircle className="h-4 w-4 mr-2" /><span className="hidden sm:inline">Complete Case</span></Button></AlertDialogTrigger><AlertDialogContent className="w-[95vw] sm:max-w-lg"><AlertDialogHeader><AlertDialogTitle>Are you sure you want to mark this case as completed?</AlertDialogTitle><AlertDialogDescription>This will finalize the file status and notify the Registry.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter className="flex flex-col sm:flex-row gap-2"><AlertDialogCancel className="sm:mt-0">Cancel</AlertDialogCancel><AlertDialogAction onClick={() => authToggleStatus(file.id, file.fileNumber, 'Completed')} className="bg-green-600 hover:bg-green-700">Confirm Completion</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>)}
+                    {isLead && !isCompleted && (
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="outline" size="sm" className="h-8 border-green-200 text-green-700 hover:bg-green-50"><CheckCircle className="h-4 w-4 mr-2" /><span className="hidden sm:inline">Complete Case</span></Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent className="w-[95vw] sm:max-w-lg">
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you sure you want to mark this case as completed?</AlertDialogTitle>
+                                    <AlertDialogDescription>This will finalize the file status and notify the Registry.</AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter className="flex flex-col sm:flex-row gap-2">
+                                    <AlertDialogCancel className="sm:mt-0">Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => authToggleStatus(file.id, file.fileNumber, 'Completed')} className="bg-green-600 hover:bg-green-700">Confirm Completion</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    )}
                     {isSG && <Badge className={cn("text-white border-none text-[9px] uppercase tracking-widest gap-1", isActingSG ? "bg-amber-500" : "bg-yellow-500")}>{isActingSG ? <HandIcon className="h-3 w-3" /> : <Crown className="h-3 w-3" />} {isActingSG ? 'Acting SG Oversight' : 'SG Oversight'}</Badge>}
                     {attorney?.isActingGroupHead && !isSG && <Badge className="bg-blue-500 text-white border-none text-[9px] uppercase tracking-widest gap-1"><ShieldAlert className="h-3 w-3" /> Acting GH Oversight</Badge>}
                 </div>
@@ -399,18 +422,28 @@ export default function PortalFileDetail() {
                                 </div>
                                 <div className="space-y-1">
                                     <h3 className="text-lg font-black text-amber-900 uppercase tracking-tight">Physical File Arrival</h3>
-                                    <p className="text-sm text-amber-700 font-medium">The physical folder for this case has been delivered to your desk. Please confirm receipt.</p>
+                                    <p className="text-sm text-amber-700 font-medium">The physical folder for this case has been delivered to your desk. Please inspect and confirm receipt.</p>
                                 </div>
                             </div>
-                            <Button 
-                                size="lg" 
-                                className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white font-black uppercase tracking-widest px-8"
-                                onClick={handlePerformReceipt}
-                                disabled={isConfirming}
-                            >
-                                {isConfirming ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                                Confirm Physical Receipt
-                            </Button>
+                            <div className="flex items-center gap-3 w-full sm:w-auto">
+                                <Button 
+                                    variant="outline"
+                                    className="flex-1 sm:flex-none h-12 border-amber-300 text-amber-700 hover:bg-amber-100 font-bold gap-2 px-6"
+                                    onClick={handleReportDiscrepancy}
+                                >
+                                    <MessageCircle className="h-4 w-4" />
+                                    Report Discrepancy
+                                </Button>
+                                <Button 
+                                    size="lg" 
+                                    className="flex-1 sm:flex-none bg-amber-600 hover:bg-amber-700 text-white font-black uppercase tracking-widest px-8"
+                                    onClick={handlePerformReceipt}
+                                    disabled={isConfirming}
+                                >
+                                    {isConfirming ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                                    Confirm Physical Receipt
+                                </Button>
+                            </div>
                         </CardContent>
                     </Card>
                 )}
@@ -424,7 +457,7 @@ export default function PortalFileDetail() {
 
                 <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
                     <div className="lg:col-span-1 space-y-6">
-                        <Card><CardHeader className="pb-3"><CardTitle className="text-xs text-muted-foreground uppercase">Case Summary</CardTitle></CardHeader><CardContent className="space-y-4"><div><Label className="text-[10px] text-muted-foreground uppercase">Lead Assignee</Label><p className="text-sm font-bold text-primary truncate">{file.assignedTo || 'Unassigned'}</p></div><div><Label className="text-[10px] text-muted-foreground uppercase">Current Possession</Label><Badge variant="outline" className={cn("px-2 py-0 h-5 text-[10px] truncate max-w-full", isPendingReceipt ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-100")}>{currentPossessorName}{isPendingReceipt ? ' (Awaiting Your Verification)' : ''}</Badge></div><Separator /><div className="grid grid-cols-2 gap-4"><div><Label className="text-[10px] text-muted-foreground uppercase">Suit Number</Label><p className="text-sm font-medium truncate">{file.suitNumber || 'N/A'}</p></div><div><Label className="text-[10px] text-muted-foreground uppercase">Category</Label><p className="text-sm font-medium capitalize truncate">{file.category}</p></div></div><Separator /><Button className="w-full h-10 gap-2" variant={hasPendingRequest ? "secondary" : "default"} onClick={handleRequestFile} disabled={isSubmitting || hasPendingRequest || (isPossessor && !isSG) || isCompleted || isHistoricalOnly || isPendingReceipt}>{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <HandIcon className="h-4 w-4" />}{isCompleted ? "Case Completed" : hasPendingRequest ? "Request Pending" : isPossessor ? "File at your desk" : isPendingReceipt ? "Verify Physical Receipt Above" : isHistoricalOnly ? "Read Only Access" : "Request Physical File"}</Button></CardContent></Card>
+                        <Card><CardHeader className="pb-3"><CardTitle className="text-xs text-muted-foreground uppercase">Case Summary</CardTitle></CardHeader><CardContent className="space-y-4"><div><Label className="text-[10px] text-muted-foreground uppercase">Lead Assignee</Label><p className="text-sm font-bold text-primary truncate">{file.assignedTo || 'Unassigned'}</p></div><div><Label className="text-[10px] text-muted-foreground uppercase">Current Possession</Label><Badge variant="outline" className={cn("px-2 py-0 h-5 text-[10px] truncate max-w-full", isPendingReceipt ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-100")}>{currentPossessorName}{isPendingReceipt ? ' (Inspection Required)' : ''}</Badge></div><Separator /><div className="grid grid-cols-2 gap-4"><div><Label className="text-[10px] text-muted-foreground uppercase">Suit Number</Label><p className="text-sm font-medium truncate">{file.suitNumber || 'N/A'}</p></div><div><Label className="text-[10px] text-muted-foreground uppercase">Category</Label><p className="text-sm font-medium capitalize truncate">{file.category}</p></div></div><Separator /><Button className="w-full h-10 gap-2" variant={hasPendingRequest ? "secondary" : "default"} onClick={handleRequestFile} disabled={isSubmitting || hasPendingRequest || (isPossessor && !isSG) || isCompleted || isHistoricalOnly || isPendingReceipt}>{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <HandIcon className="h-4 w-4" />}{isCompleted ? "Case Completed" : hasPendingRequest ? "Request Pending" : isPossessor ? "File at your desk" : isPendingReceipt ? "Inspect Folder Above" : isHistoricalOnly ? "Read Only Access" : "Request Physical File"}</Button></CardContent></Card>
                         
                         {file.coAssignees && file.coAssignees.length > 0 && (
                             <Card className="border-primary/10 shadow-sm">

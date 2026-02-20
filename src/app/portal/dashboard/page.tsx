@@ -327,11 +327,11 @@ export default function PortalDashboard() {
         let message = `Hello Registry,\n\nI am reporting a discrepancy in physical file arrivals for my desk.\n\n`;
         
         if (confirmed.length > 0) {
-            message += `FILES RECEIVED:\n${confirmed.map(f => `• ${f.fileNumber}`).join('\n')}\n\n`;
+            message += `FILES AT MY DESK (VERIFIED):\n${confirmed.map(f => `• ${f.fileNumber} - ${f.subject}`).join('\n')}\n\n`;
         }
         
         if (missing.length > 0) {
-            message += `FILES MISSING/EXPECTED:\n${missing.map(f => `• ${f.fileNumber}`).join('\n')}\n\n`;
+            message += `FILES MISSING / NOT AT MY DESK:\n${missing.map(f => `• ${f.fileNumber} - ${f.subject}`).join('\n')}\n\n`;
         }
 
         message += `Please verify physical location. Thank you.`;
@@ -730,7 +730,7 @@ export default function PortalDashboard() {
                                         {(isRecentlyUpdated || isPendingReceipt) && !isCompleted && type !== 'historical' && (
                                             <div className="flex items-center gap-1 shrink-0">
                                                 <div className={cn("h-1.5 w-1.5 rounded-full animate-pulse", isPendingReceipt ? "bg-amber-600" : "bg-red-600")} />
-                                                <span className={cn("text-[8px] font-black uppercase tracking-tight", isPendingReceipt ? "text-amber-600" : "text-red-600")}>{isPendingReceipt ? 'Arrival' : 'New'}</span>
+                                                <span className={cn("text-[8px] font-black uppercase tracking-tight", isPendingReceipt ? 'Arrival' : 'New')}>{isPendingReceipt ? 'Arrival' : 'New'}</span>
                                             </div>
                                         )}
                                     </div>
@@ -738,7 +738,7 @@ export default function PortalDashboard() {
                                         {isCompleted ? (
                                             <Badge variant="secondary" className="text-[8px] uppercase h-4 bg-green-100 text-green-800 border-green-200">Resolved</Badge>
                                         ) : isPendingReceipt ? (
-                                            <Badge variant="default" className="text-[8px] uppercase h-4 bg-amber-600 text-white border-none animate-bounce">Verify Receipt</Badge>
+                                            <Badge variant="default" className="text-[8px] uppercase h-4 bg-amber-600 text-white border-none animate-bounce">Inspection Required</Badge>
                                         ) : isLead ? (
                                             <Badge variant="outline" className="text-[8px] uppercase h-4">Lead</Badge>
                                         ) : isTeam ? (
@@ -766,7 +766,21 @@ export default function PortalDashboard() {
                                             disabled={isConfirming}
                                         >
                                             {isConfirming ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-                                            Confirm Receipt
+                                            Confirm
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            className="h-8 w-8 border-amber-300 text-amber-700 hover:bg-amber-50"
+                                            title="Report Error / File Not Here"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                const msg = encodeURIComponent(`Hello Registry,\n\nI am reporting an issue with file *${file.fileNumber}* (${file.subject}). It is showing as arriving at my desk but either it's not here or it's been sent to me in error.\n\nPlease verify.`);
+                                                window.open(`https://wa.me/233244000000?text=${msg}`, '_blank');
+                                            }}
+                                        >
+                                            <AlertCircle className="h-4 w-4" />
                                         </Button>
                                     </div>
                                 ) : (
@@ -1048,27 +1062,25 @@ export default function PortalDashboard() {
                                                 <Badge className="bg-amber-600 text-white border-none h-5 px-2 py-0 text-[10px] font-bold">{caseloads.arrivals.length}</Badge>
                                             </div>
                                             <div className="flex items-center gap-2">
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="outline" 
+                                                    className="h-9 border-amber-300 text-amber-700 bg-amber-50 font-bold gap-2"
+                                                    onClick={handleReportArrivalDiscrepancy}
+                                                >
+                                                    <MessageCircle className="h-4 w-4" />
+                                                    Report Discrepancy
+                                                </Button>
                                                 {selectedArrivalIds.size > 0 && (
-                                                    <>
-                                                        <Button 
-                                                            size="sm" 
-                                                            variant="outline" 
-                                                            className="h-9 border-amber-300 text-amber-700 bg-amber-50 font-bold gap-2"
-                                                            onClick={handleReportArrivalDiscrepancy}
-                                                        >
-                                                            <MessageCircle className="h-4 w-4" />
-                                                            Report Discrepancy
-                                                        </Button>
-                                                        <Button 
-                                                            size="sm" 
-                                                            className="h-9 bg-amber-600 hover:bg-amber-700 text-white font-black uppercase tracking-widest gap-2 px-6"
-                                                            onClick={handleBatchConfirm}
-                                                            disabled={isBatchConfirming}
-                                                        >
-                                                            {isBatchConfirming ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                                                            Confirm {selectedArrivalIds.size} Selected
-                                                        </Button>
-                                                    </>
+                                                    <Button 
+                                                        size="sm" 
+                                                        className="h-9 bg-amber-600 hover:bg-amber-700 text-white font-black uppercase tracking-widest gap-2 px-6"
+                                                        onClick={handleBatchConfirm}
+                                                        disabled={isBatchConfirming}
+                                                    >
+                                                        {isBatchConfirming ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                                                        Confirm {selectedArrivalIds.size} Selected
+                                                    </Button>
                                                 )}
                                                 <Button 
                                                     variant="ghost" 
