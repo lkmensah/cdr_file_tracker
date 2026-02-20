@@ -1,7 +1,7 @@
 'use client';
 
 import type { CorrespondenceFile, Letter, Movement, Attorney, CaseReminder, FileRequest, Reminder } from '@/lib/types';
-import { Folder, Mail, Scale, Truck, CheckCircle2, Loader2, UserCheck, Users, Calendar, MessageCircle, MessageSquare, FileText, AlertCircle, HandIcon, Clock, Bell, History, Zap, AlarmClock } from 'lucide-react';
+import { Folder, Mail, Scale, Truck, CheckCircle2, Loader2, UserCheck, Users, Calendar, MessageCircle, MessageSquare, FileText, AlertCircle, HandIcon, Clock, Bell, History, Zap, AlarmClock, Send } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DashboardChart } from './dashboard-chart';
 import { WorkloadAnalytics } from './workload-analytics';
@@ -177,23 +177,19 @@ export function Dashboard({
   }, [firestore, selectedFileId]);
   const { data: selectedFileForDetail } = useDoc<CorrespondenceFile>(selectedFileRef);
 
-  const handleConfirm = async (file: typeof inTransitFiles[0]) => {
-    const formData = new FormData();
-    formData.append('fileNumber', file.fileNumber);
-    formData.append('movementId', file.latestMovement.id);
-    const result = await authConfirmReceipt(formData);
+  const handleNotifyAttorney = (file: typeof inTransitFiles[0]) => {
+    const destination = file.latestMovement.movedTo;
+    const targetAttorney = attorneys?.find(a => a.fullName.toLowerCase() === destination.toLowerCase());
     
-    if (result && result.message?.includes('Success')) {
-        toast({ title: "Receipt Confirmed", description: `File ${file.fileNumber} has been received.` });
-        const destination = file.latestMovement.movedTo;
-        const targetAttorney = attorneys?.find(a => a.fullName.toLowerCase() === destination.toLowerCase());
-        if (targetAttorney?.phoneNumber) {
-            const truncatedSubject = truncate(file.subject, 60);
-            const message = encodeURIComponent(
-                `Hello ${targetAttorney.fullName},\n\nThe following file(s) have been delivered to your desk and confirmed received in the CDR_File Tracker system:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease verify physical receipt.\n\nThank you.`
-            );
-            window.open(`https://wa.me/${targetAttorney.phoneNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
-        }
+    if (targetAttorney?.phoneNumber) {
+        const truncatedSubject = truncate(file.subject, 60);
+        const message = encodeURIComponent(
+            `Hello ${targetAttorney.fullName},\n\nThe following physical file has been delivered to your desk:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease log in to your Attorney Portal immediately to verify and confirm receipt of the physical folder.\n\nThank you.`
+        );
+        window.open(`https://wa.me/${targetAttorney.phoneNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
+        toast({ title: "WhatsApp Alert Opened", description: `Please send the message to notify ${targetAttorney.fullName}.` });
+    } else {
+        toast({ variant: 'destructive', title: "No Contact Info", description: `${destination} has no registered phone number.` });
     }
   };
 
@@ -237,30 +233,18 @@ export function Dashboard({
     }
   };
 
-  const handleConfirmGroup = async (destination: string, files: typeof inTransitFiles) => {
-    let successCount = 0;
-    const confirmedFilesInfo: string[] = [];
-
-    for (const file of files) {
-        const formData = new FormData();
-        formData.append('fileNumber', file.fileNumber);
-        formData.append('movementId', file.latestMovement.id);
-        const result = await authConfirmReceipt(formData);
-        if (result && result.message?.includes('Success')) {
-            successCount++;
-            confirmedFilesInfo.push(`• *${file.fileNumber}* - ${truncate(file.subject, 60)}`);
-        }
-    }
+  const handleNotifyBatch = (destination: string, files: typeof inTransitFiles) => {
+    const targetAttorney = attorneys?.find(a => a.fullName.toLowerCase() === destination.toLowerCase());
     
-    if (successCount > 0) {
-        toast({ title: "Batch Confirmed", description: `Successfully confirmed ${successCount} files for ${destination}.` });
-        const targetAttorney = attorneys?.find(a => a.fullName.toLowerCase() === destination.toLowerCase());
-        if (targetAttorney?.phoneNumber) {
-            const message = encodeURIComponent(
-                `Hello ${targetAttorney.fullName},\n\nThe following file(s) have been delivered to your desk and confirmed received in the CDR_File Tracker system:\n\n${confirmedFilesInfo.join('\n')}\n\nPlease verify physical receipt.\n\nThank you.`
-            );
-            window.open(`https://wa.me/${targetAttorney.phoneNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
-        }
+    if (targetAttorney?.phoneNumber) {
+        const fileList = files.map(f => `• *${f.fileNumber}* - ${truncate(f.subject, 60)}`).join('\n');
+        const message = encodeURIComponent(
+            `Hello ${targetAttorney.fullName},\n\nThe following physical file(s) have been delivered to your desk:\n\n${fileList}\n\nPlease log in to your Attorney Portal immediately to verify and confirm receipt of the physical folder(s).\n\nThank you.`
+        );
+        window.open(`https://wa.me/${targetAttorney.phoneNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
+        toast({ title: "Batch Notification Opened" });
+    } else {
+        toast({ variant: 'destructive', title: "No Contact Info", description: `${destination} has no registered phone number.` });
     }
   };
 
@@ -484,7 +468,7 @@ export function Dashboard({
             <DialogContent className="w-[95vw] sm:max-w-4xl max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Files in Transit</DialogTitle>
-                    <DialogDescription>Awaiting acknowledgment at their destination. Grouped by recipient.</DialogDescription>
+                    <DialogDescription>Awaiting physical receipt confirmation from the assigned practitioners.</DialogDescription>
                 </DialogHeader>
                 <div className="py-4 space-y-8 [&_*]:min-w-0">
                     {Object.keys(groupedInTransit).length > 0 ? (
@@ -496,9 +480,9 @@ export function Dashboard({
                                         <h3 className="font-semibold text-lg truncate">{destination}</h3>
                                         <span className="text-sm text-muted-foreground ml-2 shrink-0">({files.length})</span>
                                     </div>
-                                    <Button size="sm" variant="outline" className="h-8 bg-background shrink-0 w-full sm:w-auto" onClick={() => handleConfirmGroup(destination, files)} disabled={isConfirming}>
-                                        {isConfirming ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> : <CheckCircle2 className="h-3.5 w-3.5 text-green-600 mr-2" />}
-                                        Confirm &amp; Notify
+                                    <Button size="sm" variant="outline" className="h-8 bg-background shrink-0 w-full sm:w-auto gap-2" onClick={() => handleNotifyBatch(destination, files)}>
+                                        <MessageCircle className="h-3.5 w-3.5 text-green-600" />
+                                        Notify via WhatsApp
                                     </Button>
                                 </div>
                                 <div className="rounded-md border overflow-hidden">
@@ -525,8 +509,9 @@ export function Dashboard({
                                                             {moveDate ? format(moveDate, 'MMM d, p') : 'N/A'}
                                                         </TableCell>
                                                         <TableCell className="text-right">
-                                                            <Button size="sm" variant="ghost" className="h-8 hover:bg-green-50 hover:text-green-700" onClick={() => handleConfirm(file)} disabled={isConfirming}>
-                                                                Confirm
+                                                            <Button size="sm" variant="ghost" className="h-8 hover:bg-green-50 hover:text-green-700 gap-1.5" onClick={() => handleNotifyAttorney(file)}>
+                                                                <Send className="h-3 w-3" />
+                                                                Notify
                                                             </Button>
                                                         </TableCell>
                                                     </TableRow>
