@@ -151,3 +151,18 @@ export async function updateAttorney(clientToken: string, formData: FormData) {
         return { message: 'Failed to update attorney.' };
     }
 }
+
+export async function resetDeviceBinding(clientToken: string, id: string) {
+    const userName = await verifyUser(clientToken);
+    try {
+        const attorney = await db.getAttorneyById(id);
+        if (!attorney) return { message: 'Attorney not found.' };
+        
+        await db.resetDeviceBinding(id);
+        await logUserActivity(userName, 'RESET_DEVICE_BINDING', `Reset security lock for: ${attorney.fullName} (Access ID: ${attorney.accessId})`);
+        revalidatePath('/attorneys');
+        return { message: 'Success! Device binding reset. The attorney can now log in on a new device.' };
+    } catch (error) {
+        return { message: 'Failed to reset device binding.' };
+    }
+}

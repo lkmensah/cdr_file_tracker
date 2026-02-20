@@ -769,6 +769,12 @@ export const updateAttorney = async (id: string, data: any) => {
     });
 };
 
+export const resetDeviceBinding = async (id: string) => {
+    await getAttorneyCollectionRef().doc(id).update({
+        boundUid: FieldValue.delete()
+    });
+};
+
 export const propagateAttorneyGroupChange = async (attorneyName: string, newGroup: string) => {
     const firestore = getFirestore(initializeAdmin());
     const filesSnapshot = await getFileCollectionRef().get();

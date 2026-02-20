@@ -12,11 +12,35 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Users, Phone, Mail, MoreHorizontal, Pencil, MessageCircle, ShieldCheck, Crown, User, HandIcon, ShieldAlert } from 'lucide-react';
+import { Users, Phone, Mail, MoreHorizontal, Pencil, MessageCircle, ShieldCheck, Crown, User, HandIcon, ShieldAlert, SmartphoneNfc, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from './ui/dropdown-menu';
+import { useAuthAction } from '@/hooks/use-auth-action';
+import { resetDeviceBinding } from '@/app/actions/attorney';
+import { useToast } from '@/hooks/use-toast';
+import { useProfile } from './auth-provider';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 export function AttorneysTable({ attorneys, onEdit }: { attorneys: Attorney[], onEdit: (a: Attorney) => void }) {
+  const { toast } = useToast();
+  const { isAdmin } = useProfile();
+  const [resetTarget, setResetTarget] = React.useState<Attorney | null>(null);
+
+  const { exec: authReset, isLoading: isResetting } = useAuthAction(resetDeviceBinding, {
+    onSuccess: (res) => {
+        toast({ title: res.message });
+        setResetTarget(null);
+    }
+  });
 
   const handleWhatsApp = (phoneNumber: string) => {
     const cleaned = phoneNumber.replace(/\D/g, '');
@@ -36,6 +60,7 @@ export function AttorneysTable({ attorneys, onEdit }: { attorneys: Attorney[], o
   }
 
   return (
+    <>
     <div className="w-full overflow-x-auto rounded-md border">
       <Table>
         <TableHeader>
@@ -82,9 +107,14 @@ export function AttorneysTable({ attorneys, onEdit }: { attorneys: Attorney[], o
               </TableCell>
               <TableCell>
                 {attorney.accessId ? (
-                    <code className="bg-primary/5 text-primary px-2 py-1 rounded text-xs font-bold border border-primary/10">
-                        {attorney.accessId}
-                    </code>
+                    <div className="flex items-center gap-2">
+                        <code className="bg-primary/5 text-primary px-2 py-1 rounded text-xs font-bold border border-primary/10">
+                            {attorney.accessId}
+                        </code>
+                        {attorney.boundUid && (
+                            <Badge variant="outline" className="h-4 px-1 py-0 border-blue-200 text-blue-600 bg-blue-50 text-[8px] uppercase font-black" title="Locked to a specific device/browser">Device Locked</Badge>
+                        )}
+                    </div>
                 ) : (
                     <span className="text-muted-foreground text-[10px] italic">Needs Setup</span>
                 )}
@@ -131,6 +161,13 @@ export function AttorneysTable({ attorneys, onEdit }: { attorneys: Attorney[], o
                         <DropdownMenuItem onClick={() => onEdit(attorney)}>
                             <Pencil className="mr-2 h-4 w-4" /> Edit Details
                         </DropdownMenuItem>
+                        
+                        {isAdmin && attorney.boundUid && (
+                            <DropdownMenuItem onClick={() => setResetTarget(attorney)} className="text-blue-600 focus:text-blue-700">
+                                <SmartphoneNfc className="mr-2 h-4 w-4" /> Reset Device Access
+                            </DropdownMenuItem>
+                        )}
+
                         {attorney.phoneNumber && (
                             <>
                                 <DropdownMenuSeparator />
@@ -148,5 +185,25 @@ export function AttorneysTable({ attorneys, onEdit }: { attorneys: Attorney[], o
         </TableBody>
       </Table>
     </div>
+
+    <AlertDialog open={!!resetTarget} onOpenChange={(open) => !open && setResetTarget(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Reset Device Binding?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    This will remove the current security lock for <strong>{resetTarget?.fullName}</strong>. 
+                    They will be able to log in to the portal from a different device, which will then become their new "locked" device.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel disabled={isResetting}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => resetTarget && authReset(resetTarget.id)} disabled={isResetting} className="bg-blue-600 hover:bg-blue-700">
+                    {isResetting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Confirm Reset
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
