@@ -105,6 +105,7 @@ import {
 } from "@/components/ui/chart";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { playNotificationSound } from '@/lib/audio';
 
 const categories = [
     { value: 'all', label: 'All Categories' },
@@ -166,6 +167,9 @@ export default function PortalDashboard() {
     const [reminderTime, setReminderTime] = React.useState('09:00');
     const [selectedDateForReminder, setSelectedDateForReminder] = React.useState<Date | null>(null);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+    // Audio Alert Tracker
+    const [lastNotifiedId, setLastNotificationId] = React.useState<string | null>(null);
 
     const { exec: authTogglePin } = useAuthAction(toggleFilePin);
     const { exec: authToggleReminder } = useAuthAction(toggleReminder);
@@ -229,12 +233,12 @@ export default function PortalDashboard() {
             const isAtMyDesk = latestMovement?.movedTo?.toLowerCase().trim() === myName;
             
             const fileGroup = (file.group || 'no group yet').toLowerCase().trim();
-            const canOversight = (attorney.isGroupHead || attorney.isActingGroupHead) && !!myGroup && myGroup !== 'no group yet' && fileGroup === myGroup;
+            const isInMyGroup = (attorney.isGroupHead || attorney.isActingGroupHead) && !!myGroup && myGroup !== 'no group yet' && fileGroup === myGroup;
 
             const isPinned = file.pinnedBy?.[attorney.id] === true;
             const wasPreviouslyInvolved = file.movements?.some(m => m.movedTo?.toLowerCase().trim() === myName);
 
-            if (isLead || isCoAssignee || isAtMyDesk || canOversight || isPinned) {
+            if (isLead || isCoAssignee || isAtMyDesk || isInMyGroup || isPinned) {
                 if (file.status === 'Completed') {
                     completed.push(file);
                 } else if (isPinned) {
@@ -245,7 +249,7 @@ export default function PortalDashboard() {
                     collaborative.push(file);
                 } else if (isAtMyDesk) {
                     action.push(file);
-                } else if (canOversight) {
+                } else if (isInMyGroup) {
                     oversight.push(file);
                 }
             } else if (wasPreviouslyInvolved) {
@@ -331,11 +335,11 @@ export default function PortalDashboard() {
             const latestMovement = movements[0];
             const isAtMyDesk = latestMovement?.movedTo?.toLowerCase().trim() === myName;
             const fileGroup = (file.group || 'no group yet').toLowerCase().trim();
-            const canOversight = (attorney.isGroupHead || attorney.isActingGroupHead) && !!myGroup && myGroup !== 'no group yet' && fileGroup === myGroup;
+            const isInMyGroup = (attorney.isGroupHead || attorney.isActingGroupHead) && !!myGroup && myGroup !== 'no group yet' && fileGroup === myGroup;
             const isPinned = file.pinnedBy?.[attorney.id] === true;
             const isHistorical = file.movements?.some(m => m.movedTo?.toLowerCase().trim() === myName);
             
-            if (isLead || isCoAssignee || isAtMyDesk || canOversight || isPinned || isHistorical) {
+            if (isLead || isCoAssignee || isAtMyDesk || isInMyGroup || isPinned || isHistorical) {
                 unique.set(file.id, file);
             }
         });
@@ -356,6 +360,7 @@ export default function PortalDashboard() {
             
             (file.internalInstructions || []).forEach(i => {
                 const d = toDate(i.date);
+                // Notification Policy: Must be AFTER last view, NOT in the future, and NOT from self.
                 if (d && isAfter(d, referencePoint) && !isAfter(d, now) && i.from.toLowerCase().trim() !== myName) {
                     notes.push({ id: i.id, fileId: file.id, fileNumber: file.fileNumber, message: `New message from ${i.from}`, timestamp: d, type: 'communication' });
                 }
@@ -382,6 +387,22 @@ export default function PortalDashboard() {
         
         return notes.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 30);
     }, [myRelatedFiles, attorney, isSG]);
+
+    // Audible Alert Hook
+    React.useEffect(() => {
+        const newestNote = notifications[0];
+        if (newestNote) {
+            // If we have a truly new notification (not the one we tracked last)
+            // and we've already initialized the tracker (to avoid beep on first load)
+            if (lastNotifiedId !== null && newestNote.id !== lastNotifiedId) {
+                playNotificationSound();
+            }
+            setLastNotificationId(newestNote.id);
+        } else if (notifications.length === 0) {
+            // Ensure clear actions correctly reset the tracking anchor
+            setLastNotificationId("");
+        }
+    }, [notifications, lastNotifiedId]);
 
     const handleClearAllNotifications = async () => {
         if (!attorney || myRelatedFiles.length === 0) return;
