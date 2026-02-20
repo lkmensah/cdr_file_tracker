@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -136,7 +135,7 @@ const toDate = (value: any): Date | null => {
 
 const STAGNATION_THRESHOLD_DAYS = 14;
 const OVERLOAD_THRESHOLD = 10;
-const PAGE_SIZE = 24; // Multiples of 3 work best for the grid
+const PAGE_SIZE = 24; 
 
 const workloadChartConfig = {
   active: {
@@ -168,7 +167,6 @@ export default function PortalDashboard() {
     const [selectedDateForReminder, setSelectedDateForReminder] = React.useState<Date | null>(null);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
 
-    // Audio Alert Tracker
     const [lastNotifiedId, setLastNotificationId] = React.useState<string | null>(null);
 
     const { exec: authTogglePin } = useAuthAction(toggleFilePin);
@@ -360,7 +358,6 @@ export default function PortalDashboard() {
             
             (file.internalInstructions || []).forEach(i => {
                 const d = toDate(i.date);
-                // Notification Policy: Must be AFTER last view, NOT in the future, and NOT from self.
                 if (d && isAfter(d, referencePoint) && !isAfter(d, now) && i.from.toLowerCase().trim() !== myName) {
                     notes.push({ id: i.id, fileId: file.id, fileNumber: file.fileNumber, message: `New message from ${i.from}`, timestamp: d, type: 'communication' });
                 }
@@ -388,18 +385,14 @@ export default function PortalDashboard() {
         return notes.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 30);
     }, [myRelatedFiles, attorney, isSG]);
 
-    // Audible Alert Hook
     React.useEffect(() => {
         const newestNote = notifications[0];
         if (newestNote) {
-            // If we have a truly new notification (not the one we tracked last)
-            // and we've already initialized the tracker (to avoid beep on first load)
             if (lastNotifiedId !== null && newestNote.id !== lastNotifiedId) {
                 playNotificationSound();
             }
             setLastNotificationId(newestNote.id);
         } else if (notifications.length === 0) {
-            // Ensure clear actions correctly reset the tracking anchor
             setLastNotificationId("");
         }
     }, [notifications, lastNotifiedId]);
@@ -804,7 +797,7 @@ export default function PortalDashboard() {
                     <section className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 min-w-0">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-background p-6 rounded-2xl border shadow-sm border-primary/10">
                             <div>
-                                <h2 className="text-3xl font-black tracking-tight flex items-center gap-3">{isSG ? <Crown className="h-8 w-8 text-yellow-500" /> : <ShieldCheck className="h-8 w-8 text-primary" />}{isSG ? 'Executive Oversight' : 'Group Hub'}</h2>
+                                <h2 className="text-3xl font-black tracking-tight flex items-center gap-3">{isSG ? <Crown className="h-8 w-8 text-yellow-500" /> : <ShieldCheck className="h-8 w-8 text-primary" />}{isSG ? 'General Oversight' : 'Group Hub'}</h2>
                                 <p className="text-sm text-muted-foreground mt-1">Strategic performance monitoring for <strong>{isSG ? 'All departments' : attorney.group || 'no group yet'}</strong></p>
                             </div>
                             <div className="flex items-center gap-3">
@@ -979,7 +972,7 @@ export default function PortalDashboard() {
 
                         <div className="space-y-12 min-w-0">
                             {isSG ? (
-                                <section className="space-y-6 min-w-0"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4"><h3 className="text-sm font-black flex items-center gap-3 text-yellow-600 uppercase tracking-[0.2em]"><LayoutDashboard className="h-5 w-5" /> Master Registry Cluster</h3><Badge variant="outline" className={cn("text-[10px] h-6 px-3 border-yellow-500 text-yellow-700 bg-yellow-50 uppercase font-black tracking-widest rounded-full shadow-sm", isActingSG && "border-amber-500 text-amber-700 bg-amber-50")}>{isActingSG ? 'Acting SG Oversight Active' : 'Registry Leadership View'}</Badge></div><div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-w-0">{paginatedAllFiles.map(file => <FileCard key={file.id} file={file} type="all" />)}</div>{totalPages > 1 && (<div className="flex flex-col sm:flex-row items-center justify-between border-t pt-8 gap-6"><p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">Showing <span className="font-black text-foreground">{(currentPage - 1) * PAGE_SIZE + 1}</span> to <span className="font-black text-foreground">{Math.min(currentPage * PAGE_SIZE, caseloads.all.length)}</span> of <span className="font-black text-foreground">{caseloads.all.length}</span> records</p><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-10 px-4 rounded-xl font-bold uppercase text-[10px] tracking-widest"><ChevronLeft className="h-4 w-4 mr-2" />Prev</Button><div className="text-[10px] font-black px-4 py-2 bg-muted rounded-xl border tracking-widest">Page {currentPage} of {totalPages}</div><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="h-10 px-4 rounded-xl font-bold uppercase text-[10px] tracking-widest">Next<ChevronRightIcon className="h-4 w-4 ml-2" /></Button></div></div>)}</section>
+                                <section className="space-y-6 min-w-0"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4"><h3 className="text-sm font-black flex items-center gap-3 text-yellow-600 uppercase tracking-[0.2em]"><LayoutDashboard className="h-5 w-5" /> Master File List</h3><Badge variant="outline" className={cn("text-[10px] h-6 px-3 border-yellow-500 text-yellow-700 bg-yellow-50 uppercase font-black tracking-widest rounded-full shadow-sm", isActingSG && "border-amber-500 text-amber-700 bg-amber-50")}>{isActingSG ? 'Acting SG Oversight Active' : "Solicitor General's View"}</Badge></div><div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-w-0">{paginatedAllFiles.map(file => <FileCard key={file.id} file={file} type="all" />)}</div>{totalPages > 1 && (<div className="flex flex-col sm:flex-row items-center justify-between border-t pt-8 gap-6"><p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">Showing <span className="font-black text-foreground">{(currentPage - 1) * PAGE_SIZE + 1}</span> to <span className="font-black text-foreground">{Math.min(currentPage * PAGE_SIZE, caseloads.all.length)}</span> of <span className="font-black text-foreground">{caseloads.all.length}</span> records</p><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-10 px-4 rounded-xl font-bold uppercase text-[10px] tracking-widest"><ChevronLeft className="h-4 w-4 mr-2" />Prev</Button><div className="text-[10px] font-black px-4 py-2 bg-muted rounded-xl border tracking-widest">Page {currentPage} of {totalPages}</div><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="h-10 px-4 rounded-xl font-bold uppercase text-[10px] tracking-widest">Next<ChevronRightIcon className="h-4 w-4 ml-2" /></Button></div></div>)}</section>
                             ) : (
                                 <div className="space-y-12 min-w-0">
                                     {caseloads.pinned.length > 0 && <section className="space-y-6"><h3 className="text-xs font-black flex items-center gap-3 text-yellow-600 uppercase tracking-[0.2em] bg-yellow-50 w-fit px-4 py-2 rounded-lg border border-yellow-100"><Star className="h-5 w-5 fill-current" /> High Priority Cluster</h3><div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">{caseloads.pinned.map(file => <FileCard key={file.id} file={file} type="pinned" />)}</div></section>}
