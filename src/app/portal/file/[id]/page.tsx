@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -47,7 +46,8 @@ import {
     FileDown,
     Banknote,
     Users,
-    ShieldAlert
+    ShieldAlert,
+    Truck
 } from 'lucide-react';
 import { addInternalDraft, updateInternalDraft, deleteInternalDraft, addCaseReminder, toggleReminder, addInternalInstruction, markFileAsViewed, requestFile, toggleFilePin, toggleFileStatus, updateMilestones, deleteFileAttachment, updateLetterInFile, confirmFileReceipt, deleteLetterFromFile, deleteMovementFromFile } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
@@ -143,6 +143,7 @@ export default function PortalFileDetail() {
     const { exec: authToggleStatus } = useAuthAction(toggleFileStatus);
     const { exec: authUpdateMilestones } = useAuthAction(updateMilestones);
     const { exec: authDeleteAttachment } = useAuthAction(deleteFileAttachment);
+    const { exec: authConfirmReceipt, isLoading: isConfirming } = useAuthAction(confirmFileReceipt);
 
     const [draftTitle, setDraftTitle] = React.useState('');
     const [draftContent, setDraftContent] = React.useState('');
@@ -180,7 +181,8 @@ export default function PortalFileDetail() {
     const currentPossessorName = latestMovement?.movedTo || 'Registry';
     
     const myName = attorney?.fullName.toLowerCase().trim();
-    const isPossessor = !!myName && currentPossessorName.toLowerCase().trim() === myName;
+    const isPendingReceipt = !!myName && currentPossessorName.toLowerCase().trim() === myName && !latestMovement.receivedAt;
+    const isPossessor = !!myName && currentPossessorName.toLowerCase().trim() === myName && !!latestMovement.receivedAt;
     const isLead = !!myName && file?.assignedTo?.toLowerCase().trim() === myName;
     const isTeamMember = !!myName && file?.coAssignees?.some(name => name.toLowerCase().trim() === myName);
     
@@ -190,7 +192,7 @@ export default function PortalFileDetail() {
 
     const wasPreviouslyInvolved = !!myName && file?.movements?.some(m => m.movedTo?.toLowerCase().trim() === myName);
     
-    const hasActiveAccess = isSG || isLead || isTeamMember || isPossessor || isInMyGroup;
+    const hasActiveAccess = isSG || isLead || isTeamMember || isPossessor || isPendingReceipt || isInMyGroup;
     const isHistoricalOnly = !hasActiveAccess && wasPreviouslyInvolved;
 
     const hasPendingRequest = (file?.requests || []).some(r => r.requesterId === attorney?.id);
@@ -323,9 +325,20 @@ export default function PortalFileDetail() {
     const handleRequestFile = async () => {
         if (!file || !attorney) return;
         setIsSubmitting(true);
-        const result = await authRequestFile(file.fileNumber, attorney.id, attorney.fullName);
+        const result = await requestFile(file.fileNumber, attorney.id, attorney.fullName);
         if (result.success) { toast({ title: 'Request Sent' }); } else { toast({ variant: 'destructive', title: 'Error', description: result.message }); }
         setIsSubmitting(false);
+    }
+
+    const handlePerformReceipt = async () => {
+        if (!file || !latestMovement) return;
+        const formData = new FormData();
+        formData.append('fileNumber', file.fileNumber);
+        formData.append('movementId', latestMovement.id);
+        const result = await authConfirmReceipt(formData);
+        if (result && result.message.includes('Success')) {
+            toast({ title: 'Possession Confirmed', description: 'File marked as received.' });
+        }
     }
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -377,6 +390,31 @@ export default function PortalFileDetail() {
             </header>
 
             <main className="container mx-auto p-3 md:p-4 lg:p-6 xl:p-8 space-y-6">
+                {isPendingReceipt && (
+                    <Card className="bg-amber-50 border-amber-500 ring-2 ring-amber-500/20 shadow-lg animate-in fade-in slide-in-from-top-4 duration-500">
+                        <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+                            <div className="flex items-center gap-4 text-center sm:text-left">
+                                <div className="bg-amber-100 p-3 rounded-full border border-amber-300">
+                                    <Truck className="h-6 w-6 text-amber-600 animate-bounce" />
+                                </div>
+                                <div className="space-y-1">
+                                    <h3 className="text-lg font-black text-amber-900 uppercase tracking-tight">Physical File Arrival</h3>
+                                    <p className="text-sm text-amber-700 font-medium">The physical folder for this case has been delivered to your desk. Please confirm receipt.</p>
+                                </div>
+                            </div>
+                            <Button 
+                                size="lg" 
+                                className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white font-black uppercase tracking-widest px-8"
+                                onClick={handlePerformReceipt}
+                                disabled={isConfirming}
+                            >
+                                {isConfirming ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                                Confirm Physical Receipt
+                            </Button>
+                        </CardContent>
+                    </Card>
+                )}
+
                 {isHistoricalOnly && (<div className="flex items-center gap-3 p-4 bg-muted/50 border border-muted-foreground/20 rounded-lg text-muted-foreground shadow-sm animate-in fade-in slide-in-from-top-2"><Lock className="h-5 w-5 shrink-0" /><div><p className="text-xs font-bold uppercase tracking-widest leading-none">View-Only Access Enabled</p><p className="text-[10px] mt-1">You were previously assigned to this file. Historical access allows review, but actions are restricted to current team.</p></div></div>)}
                 {file.isJudgmentDebt && (<Card className="bg-red-50 border-red-200 shadow-sm animate-in fade-in slide-in-from-top-2 overflow-hidden"><CardContent className="p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4"><div className="flex items-center gap-4"><div className="bg-red-100 p-3 rounded-full border border-red-200"><Banknote className="h-6 w-6 text-red-600" /></div><div className="space-y-1"><p className="text-[10px] font-black text-red-800 uppercase tracking-[0.2em]">Judgment Debt Liability</p><div className="flex flex-col gap-1">{(file.amountGHC) ? (<p className="text-2xl sm:text-3xl font-black text-red-700 tabular-nums tracking-tighter">GH₵ {file.amountGHC?.toLocaleString()}</p>) : null}{file.amountUSD ? (<p className="text-xl sm:text-2xl font-black text-blue-700 tabular-nums tracking-tighter leading-none">$ {file.amountUSD?.toLocaleString()}</p>) : null}</div></div></div><div className="text-center sm:text-right"><Badge variant="destructive" className="bg-red-600 hover:bg-red-700 text-[10px] uppercase font-bold tracking-widest px-3 py-1 animate-pulse">High Priority</Badge></div></CardContent></Card>)}
 
@@ -386,7 +424,7 @@ export default function PortalFileDetail() {
 
                 <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
                     <div className="lg:col-span-1 space-y-6">
-                        <Card><CardHeader className="pb-3"><CardTitle className="text-xs text-muted-foreground uppercase">Case Summary</CardTitle></CardHeader><CardContent className="space-y-4"><div><Label className="text-[10px] text-muted-foreground uppercase">Lead Assignee</Label><p className="text-sm font-bold text-primary truncate">{file.assignedTo || 'Unassigned'}</p></div><div><Label className="text-[10px] text-muted-foreground uppercase">Current Possession</Label><Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-100 px-2 py-0 h-5 text-[10px] truncate max-w-full">{currentPossessorName}</Badge></div><Separator /><div className="grid grid-cols-2 gap-4"><div><Label className="text-[10px] text-muted-foreground uppercase">Suit Number</Label><p className="text-sm font-medium truncate">{file.suitNumber || 'N/A'}</p></div><div><Label className="text-[10px] text-muted-foreground uppercase">Category</Label><p className="text-sm font-medium capitalize truncate">{file.category}</p></div></div><Separator /><Button className="w-full h-10 gap-2" variant={hasPendingRequest ? "secondary" : "default"} onClick={handleRequestFile} disabled={isSubmitting || hasPendingRequest || (isPossessor && !isSG) || isCompleted || isHistoricalOnly}>{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <HandIcon className="h-4 w-4" />}{isCompleted ? "Case Completed" : hasPendingRequest ? "Request Pending" : isPossessor ? "File at your desk" : isHistoricalOnly ? "Read Only Access" : "Request Physical File"}</Button></CardContent></Card>
+                        <Card><CardHeader className="pb-3"><CardTitle className="text-xs text-muted-foreground uppercase">Case Summary</CardTitle></CardHeader><CardContent className="space-y-4"><div><Label className="text-[10px] text-muted-foreground uppercase">Lead Assignee</Label><p className="text-sm font-bold text-primary truncate">{file.assignedTo || 'Unassigned'}</p></div><div><Label className="text-[10px] text-muted-foreground uppercase">Current Possession</Label><Badge variant="outline" className={cn("px-2 py-0 h-5 text-[10px] truncate max-w-full", isPendingReceipt ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-100")}>{currentPossessorName}{isPendingReceipt ? ' (Awaiting Your Verification)' : ''}</Badge></div><Separator /><div className="grid grid-cols-2 gap-4"><div><Label className="text-[10px] text-muted-foreground uppercase">Suit Number</Label><p className="text-sm font-medium truncate">{file.suitNumber || 'N/A'}</p></div><div><Label className="text-[10px] text-muted-foreground uppercase">Category</Label><p className="text-sm font-medium capitalize truncate">{file.category}</p></div></div><Separator /><Button className="w-full h-10 gap-2" variant={hasPendingRequest ? "secondary" : "default"} onClick={handleRequestFile} disabled={isSubmitting || hasPendingRequest || (isPossessor && !isSG) || isCompleted || isHistoricalOnly || isPendingReceipt}>{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <HandIcon className="h-4 w-4" />}{isCompleted ? "Case Completed" : hasPendingRequest ? "Request Pending" : isPossessor ? "File at your desk" : isPendingReceipt ? "Verify Physical Receipt Above" : isHistoricalOnly ? "Read Only Access" : "Request Physical File"}</Button></CardContent></Card>
                         
                         {file.coAssignees && file.coAssignees.length > 0 && (
                             <Card className="border-primary/10 shadow-sm">
@@ -420,7 +458,7 @@ export default function PortalFileDetail() {
                                 <div className="space-y-3"><h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Attached Documents</h3><div className="grid gap-3">{ (file?.attachments || []).length > 0 ? (file.attachments || []).map(att => (<Card key={att.id}><CardContent className="p-4 flex items-center justify-between gap-3"><div className="flex items-center gap-3 min-0"><div className="p-2 bg-muted rounded shrink-0"><FileIcon className="h-5 w-5 text-muted-foreground" /></div><div className="min-w-0"><p className="text-sm font-semibold leading-none truncate">{att.name}</p><p className="text-[10px] text-muted-foreground uppercase mt-1.5 truncate">By {att.uploadedBy} • {toDate(att.uploadedAt) ? format(toDate(att.uploadedAt)!, 'MMM d') : 'N/A'}</p></div></div><div className="flex items-center gap-1 shrink-0"><Button variant="ghost" size="icon" onClick={() => handleViewDocument(att)} title="View Document"><Eye className="h-4 w-4" /></Button>{canInteract && attorney?.fullName === att.uploadedBy && (<Button variant="ghost" size="icon" onClick={() => setAttachmentToDelete(att)} className="text-destructive" title="Delete Document"><Trash2 className="h-4 w-4" /></Button>)}</div></CardContent></Card>)) : (<div className="text-center py-12 border border-dashed rounded-lg bg-background"><AlertCircle className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" /><p className="text-sm text-muted-foreground italic">No files attached to this case.</p></div>) }</div></div>
                             </TabsContent>
                             <TabsContent value="communications" className="space-y-6">
-                                {canInteract && (<Card className={cn("border-primary/20", isSG ? (isActingSG ? "bg-amber-50/20" : "bg-yellow-50/20") : attorney.isActingGroupHead ? "bg-blue-50/20" : "bg-primary/5")}><CardHeader className="pb-3"><CardTitle className="text-sm">{isSG ? (isActingSG ? 'Acting SG Directive' : 'Executive Instruction') : attorney.isActingGroupHead ? 'Acting GH Directive' : 'Team Messaging'}</CardTitle><CardDescription className="text-xs">Coordinate with co-assignees or the Registry.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="space-y-3"><Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">To:</Label><RadioGroup value={recipientType} onValueChange={(val: any) => setRecipientType(val)} className="flex flex-col gap-2"><div className="flex items-center space-x-2 bg-background p-2 rounded-md border shadow-sm"><RadioGroupItem value="lead" id="target-lead" /><Label htmlFor="target-lead" className="text-xs font-medium cursor-pointer">Lead / Team</Label></div>{(isSG || attorney.isActingGroupHead) && (<div className="flex items-center space-x-2 bg-background p-2 rounded-md border shadow-sm"><RadioGroupItem value="attorney" id="target-attorney" /><Label htmlFor="target-attorney" className="text-xs font-medium cursor-pointer">Specific Attorney</Label></div>)}<div className="flex items-center space-x-2 bg-background p-2 rounded-md border shadow-sm"><RadioGroupItem value="registry" id="target-registry" /><Label htmlFor="target-registry" className="text-xs font-medium cursor-pointer">The Registry</Label></div></RadioGroup></div>{recipientType === 'attorney' && (<div className="space-y-2 animate-in fade-in zoom-in-95"><Label className="text-[10px] uppercase font-bold text-muted-foreground">Select Recipient</Label><Combobox options={attorneyOptions} value={specificRecipientId} onChange={setSpecificRecipientId} placeholder="Choose attorney..." searchPlaceholder="Search by name..." /></div>)}<Textarea placeholder="Type your message to the team..." value={instructionText} onChange={(e) => setInstructionText(e.target.value)} className="min-h-[100px] text-sm bg-background" /><Button className={cn("w-full h-9 gap-2", isSG ? (isActingSG ? "bg-amber-600 hover:bg-amber-700" : "bg-yellow-600 hover:bg-yellow-700") : attorney.isActingGroupHead ? "bg-blue-600 hover:bg-blue-700" : "bg-primary hover:bg-primary/90")} onClick={handleSendInstruction} disabled={isSubmitting || !instructionText.trim() || (recipientType === 'attorney' && !specificRecipientId)}>{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{isSG || attorney.isActingGroupHead ? 'Issue Directive' : 'Send Message'}</Button></CardContent></Card>)}
+                                {canInteract && (<Card className={cn("border-primary/20", isSG ? (isActingSG ? "bg-amber-50/20" : "bg-yellow-50/20") : attorney.isActingGroupHead ? "bg-blue-50/20" : "bg-primary/5")}><CardHeader className="pb-3"><CardTitle className="text-sm">{isSG ? (isActingSG ? 'Acting SG Directive' : 'Executive Instruction') : attorney.isActingGroupHead ? 'Acting GH Directive' : 'Team Messaging'}</CardTitle><CardDescription className="text-xs">Coordinate with co-assignees or the Registry.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="space-y-3"><Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">To:</Label><RadioGroup value={recipientType} onValueChange={(val: any) => setRecipientType(val)} className="flex flex-col gap-2"><div className="flex items-center space-x-2 bg-background p-2 rounded-md border shadow-sm"><RadioGroupItem value="lead" id="target-lead" /><Label htmlFor="target-lead" className="text-xs font-medium cursor-pointer">Lead / Team</Label></div>{(isSG || attorney.isActingGroupHead) && (<div className="flex items-center space-x-2 bg-background p-2 rounded-md border shadow-sm"><RadioGroupItem value="attorney" id="target-attorney" /><Label htmlFor="target-attorney" className="text-xs font-medium cursor-pointer">Specific Attorney</Label></div>)}<div className="flex items-center space-x-2 bg-background p-2 rounded-md border shadow-sm"><RadioGroupItem value="registry" id="target-registry" /><Label htmlFor="target-registry" className="text-xs font-medium cursor-pointer">The Registry</Label></div></RadioGroup></div>{recipientType === 'attorney' && (<div className="space-y-2 animate-in fade-in zoom-in-95"><Label className="text-[10px] uppercase font-bold text-muted-foreground">Select Recipient</Label><Combobox options={attorneyOptions} value={specificRecipientId} onChange={specificRecipientId => setSpecificRecipientId(specificRecipientId)} placeholder="Choose attorney..." searchPlaceholder="Search by name..." /></div>)}<Textarea placeholder="Type your message to the team..." value={instructionText} onChange={(e) => setInstructionText(e.target.value)} className="min-h-[100px] text-sm bg-background" /><Button className={cn("w-full h-9 gap-2", isSG ? (isActingSG ? "bg-amber-600 hover:bg-amber-700" : "bg-yellow-600 hover:bg-yellow-700") : attorney.isActingGroupHead ? "bg-blue-600 hover:bg-blue-700" : "bg-primary hover:bg-primary/90")} onClick={handleSendInstruction} disabled={isSubmitting || !instructionText.trim() || (recipientType === 'attorney' && !specificRecipientId)}>{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{isSG || attorney.isActingGroupHead ? 'Issue Directive' : 'Send Message'}</Button></CardContent></Card>)}
                                 <div className="space-y-4">{(file?.internalInstructions || []).length > 0 ? [...(file.internalInstructions)].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0)).map(instruction => (<div key={instruction.id} className={cn("relative pl-4 border-l-2 py-1", instruction.from.toLowerCase().includes('solicitor general') ? "border-l-yellow-500" : instruction.from.toLowerCase().includes('acting group head') ? "border-l-blue-500" : instruction.from.toLowerCase().includes('registry') ? "border-l-blue-500" : "border-l-primary/30")}><div className="flex flex-col sm:flex-row sm:items-center justify-between mb-1 gap-1"><div className="flex items-center gap-2 flex-wrap"><span className={cn("text-[10px] font-bold uppercase", instruction.from.toLowerCase().includes('solicitor general') ? "text-yellow-700" : instruction.from.toLowerCase().includes('acting group head') ? "text-blue-700" : instruction.from.toLowerCase().includes('registry') ? "text-blue-600" : "text-primary")}>{instruction.from}</span><span className="text-muted-foreground text-[10px]">→</span><span className="text-[10px] font-bold text-muted-foreground uppercase">{instruction.to}</span></div><span className="text-[9px] text-muted-foreground font-mono whitespace-nowrap">{toDate(instruction.date) ? format(toDate(instruction.date)!, 'MMM d, p') : 'N/A'}</span></div><p className={cn("text-sm leading-relaxed p-3 rounded-md border shadow-sm", instruction.from.toLowerCase().includes('solicitor general') ? "bg-yellow-50/30 border-yellow-100 italic" : instruction.from.toLowerCase().includes('acting group head') ? "bg-blue-50/30 border-blue-100 italic" : instruction.from.toLowerCase().includes('registry') ? "bg-blue-50/30" : "bg-background")}>{instruction.text}</p></div>)) : (<div className="text-center py-20 border border-dashed rounded-lg bg-background"><p className="text-sm text-muted-foreground">No communication history yet.</p></div>)}</div>
                             </TabsContent>
                             <TabsContent value="drafts" className="space-y-4">

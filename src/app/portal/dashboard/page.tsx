@@ -48,7 +48,8 @@ import {
     FileDown,
     Filter,
     HandIcon,
-    ShieldAlert
+    ShieldAlert,
+    Inbox
 } from 'lucide-react';
 import Link from 'next/link';
 import { 
@@ -69,7 +70,7 @@ import {
     formatDistanceToNow,
     differenceInDays
 } from 'date-fns';
-import { toggleReminder, addCaseReminder, toggleFilePin, addGeneralReminder, toggleGeneralReminder, markAllFilesAsViewed } from '@/app/actions';
+import { toggleReminder, addCaseReminder, toggleFilePin, addGeneralReminder, toggleGeneralReminder, markAllFilesAsViewed, confirmFileReceipt } from '@/app/actions';
 import { cn } from '@/lib/utils';
 import {
     Dialog,
@@ -175,6 +176,7 @@ export default function PortalDashboard() {
     const { exec: authAddGeneralReminder } = useAuthAction(addGeneralReminder);
     const { exec: authToggleGeneralReminder } = useAuthAction(toggleGeneralReminder);
     const { exec: authClearAllViewed, isLoading: isClearing } = useAuthAction(markAllFilesAsViewed);
+    const { exec: authConfirmReceipt, isLoading: isConfirming } = useAuthAction(confirmFileReceipt);
 
     const filesQuery = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -194,7 +196,7 @@ export default function PortalDashboard() {
     }, [searchTerm]);
 
     const caseloads = React.useMemo(() => {
-        if (!allFiles || !attorney) return { primary: [], collaborative: [], action: [], pinned: [], oversight: [], completed: [], historical: [], all: [] };
+        if (!allFiles || !attorney) return { primary: [], collaborative: [], action: [], pinned: [], oversight: [], completed: [], historical: [], all: [], arrivals: [] };
         
         const term = searchTerm.toLowerCase();
         const primary: CorrespondenceFile[] = [];
@@ -205,6 +207,7 @@ export default function PortalDashboard() {
         const completed: CorrespondenceFile[] = [];
         const historical: CorrespondenceFile[] = [];
         const all: CorrespondenceFile[] = [];
+        const arrivals: CorrespondenceFile[] = [];
 
         const myName = attorney.fullName.toLowerCase().trim();
         const myGroup = attorney.group?.toLowerCase().trim();
@@ -226,9 +229,11 @@ export default function PortalDashboard() {
 
             const isLead = file.assignedTo?.toLowerCase().trim() === myName;
             const isCoAssignee = file.coAssignees?.some(name => name.toLowerCase().trim() === myName);
+            
             const movements = [...(file.movements || [])].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0));
             const latestMovement = movements[0];
-            const isAtMyDesk = latestMovement?.movedTo?.toLowerCase().trim() === myName;
+            const isAtMyDeskUnconfirmed = latestMovement?.movedTo?.toLowerCase().trim() === myName && !latestMovement.receivedAt;
+            const isAtMyDeskConfirmed = latestMovement?.movedTo?.toLowerCase().trim() === myName && !!latestMovement.receivedAt;
             
             const fileGroup = (file.group || 'no group yet').toLowerCase().trim();
             const isInMyGroup = (attorney.isGroupHead || attorney.isActingGroupHead) && !!myGroup && myGroup !== 'no group yet' && fileGroup === myGroup;
@@ -236,7 +241,11 @@ export default function PortalDashboard() {
             const isPinned = file.pinnedBy?.[attorney.id] === true;
             const wasPreviouslyInvolved = file.movements?.some(m => m.movedTo?.toLowerCase().trim() === myName);
 
-            if (isLead || isCoAssignee || isAtMyDesk || isInMyGroup || isPinned) {
+            if (isAtMyDeskUnconfirmed) {
+                arrivals.push(file);
+            }
+
+            if (isLead || isCoAssignee || isAtMyDeskConfirmed || isAtMyDeskUnconfirmed || isInMyGroup || isPinned) {
                 if (file.status === 'Completed') {
                     completed.push(file);
                 } else if (isPinned) {
@@ -245,7 +254,7 @@ export default function PortalDashboard() {
                     primary.push(file);
                 } else if (isCoAssignee) {
                     collaborative.push(file);
-                } else if (isAtMyDesk) {
+                } else if (isAtMyDeskConfirmed) {
                     action.push(file);
                 } else if (isInMyGroup) {
                     oversight.push(file);
@@ -255,7 +264,7 @@ export default function PortalDashboard() {
             }
         });
 
-        return { primary, collaborative, action, pinned, oversight, completed, historical, all };
+        return { primary, collaborative, action, pinned, oversight, completed, historical, all, arrivals };
     }, [allFiles, attorney, searchTerm, isSG]);
 
     const paginatedAllFiles = React.useMemo(() => {
@@ -264,6 +273,27 @@ export default function PortalDashboard() {
     }, [caseloads.all, currentPage]);
 
     const totalPages = Math.ceil(caseloads.all.length / PAGE_SIZE);
+
+    const handleConfirmReceipt = async (e: React.MouseEvent, file: CorrespondenceFile) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!attorney) return;
+
+        const movements = [...(file.movements || [])].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0));
+        const latest = movements[0];
+        if (!latest) return;
+
+        const formData = new FormData();
+        formData.append('fileNumber', file.fileNumber);
+        formData.append('movementId', latest.id);
+
+        const result = await authConfirmReceipt(formData);
+        if (result && result.message.includes('Success')) {
+            toast({ title: 'Receipt Confirmed', description: `File ${file.fileNumber} is now in your possession.` });
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: result?.message || 'Failed to confirm receipt.' });
+        }
+    }
 
     const stagnantOversightFiles = React.useMemo(() => {
         const sourceList = isSG ? caseloads.all : caseloads.oversight;
@@ -408,7 +438,7 @@ export default function PortalDashboard() {
 
     const availableFiles = React.useMemo(() => {
         if (isSG) return allFiles?.filter(f => f.status !== 'Completed') || [];
-        return [...caseloads.pinned, ...caseloads.primary, ...caseloads.collaborative, ...caseloads.action];
+        return [...caseloads.pinned, ...caseloads.primary, ...caseloads.collaborative, ...caseloads.action, ...caseloads.arrivals];
     }, [caseloads, allFiles, isSG]);
 
     const fileOptions = React.useMemo(() => {
@@ -604,10 +634,11 @@ export default function PortalDashboard() {
     const endDate = endOfWeek(monthEnd);
     const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
 
-    const FileCard = ({ file, type }: { file: CorrespondenceFile, type: 'pinned' | 'primary' | 'collaborative' | 'action' | 'oversight' | 'completed' | 'historical' | 'all' }) => {
+    const FileCard = ({ file, type }: { file: CorrespondenceFile, type: 'pinned' | 'primary' | 'collaborative' | 'action' | 'oversight' | 'completed' | 'historical' | 'all' | 'arrival' }) => {
         const movements = [...(file.movements || [])].sort((a,b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0));
         const latestMovement = movements[0];
-        const isWithMe = latestMovement?.movedTo?.toLowerCase().trim() === attorney.fullName.toLowerCase().trim();
+        const isPendingReceipt = latestMovement?.movedTo?.toLowerCase().trim() === attorney.fullName.toLowerCase().trim() && !latestMovement.receivedAt;
+        const isWithMe = latestMovement?.movedTo?.toLowerCase().trim() === attorney.fullName.toLowerCase().trim() && !!latestMovement.receivedAt;
         const isLead = file.assignedTo?.toLowerCase().trim() === attorney.fullName.toLowerCase().trim();
         const isTeam = file.coAssignees?.some(name => name.toLowerCase().trim() === attorney.fullName.toLowerCase().trim());
         
@@ -619,6 +650,7 @@ export default function PortalDashboard() {
         return (
             <Link href={`/portal/file/${file.id}`} className="block h-full group relative">
                 <Card className={cn("h-full hover:border-primary transition-all duration-300 shadow-sm border-l-4 overflow-hidden flex flex-col group-hover:shadow-md", 
+                    isPendingReceipt ? "border-l-amber-500 bg-amber-50/10 ring-2 ring-amber-500/20" :
                     isCompleted ? "border-l-green-500 bg-green-50/5 opacity-90" : 
                     type === 'pinned' ? "border-l-yellow-500 bg-yellow-50/10" : 
                     type === 'primary' ? "border-l-primary" : 
@@ -638,16 +670,18 @@ export default function PortalDashboard() {
                                         type === 'oversight' ? "text-purple-600" :
                                         type === 'historical' ? "text-muted-foreground" :
                                         "text-blue-600" )}>{file.fileNumber}</span>
-                                    {isRecentlyUpdated && !isCompleted && type !== 'historical' && (
+                                    {(isRecentlyUpdated || isPendingReceipt) && !isCompleted && type !== 'historical' && (
                                         <div className="flex items-center gap-1 shrink-0">
-                                            <div className="h-1.5 w-1.5 rounded-full bg-red-600 animate-pulse" />
-                                            <span className="text-[8px] font-black uppercase text-red-600 tracking-tight">New</span>
+                                            <div className={cn("h-1.5 w-1.5 rounded-full animate-pulse", isPendingReceipt ? "bg-amber-600" : "bg-red-600")} />
+                                            <span className={cn("text-[8px] font-black uppercase tracking-tight", isPendingReceipt ? "text-amber-600" : "text-red-600")}>{isPendingReceipt ? 'Arrival' : 'New'}</span>
                                         </div>
                                     )}
                                 </div>
                                 <div className="flex gap-1 shrink-0">
                                     {isCompleted ? (
                                         <Badge variant="secondary" className="text-[8px] uppercase h-4 bg-green-100 text-green-800 border-green-200">Resolved</Badge>
+                                    ) : isPendingReceipt ? (
+                                        <Badge variant="default" className="text-[8px] uppercase h-4 bg-amber-600 text-white border-none animate-bounce">Verify Receipt</Badge>
                                     ) : isLead ? (
                                         <Badge variant="outline" className="text-[8px] uppercase h-4">Lead</Badge>
                                     ) : isTeam ? (
@@ -666,25 +700,39 @@ export default function PortalDashboard() {
                         </div>
 
                         <div className="pt-3 border-t space-y-2">
-                            <div className="flex items-center justify-between text-[9px] uppercase font-bold tracking-widest text-muted-foreground">
-                                <span className="truncate max-w-[60%]">{file.category}</span>
-                                <span className="shrink-0">{format(toDate(file.lastActivityAt || file.reportableDate || file.dateCreated)!, 'MMM d')}</span>
-                            </div>
-                            <div className="flex items-center gap-2 min-w-0">
-                                <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                    <Badge variant="outline" className="bg-muted/30 text-[9px] h-5 py-0 border-none shrink-0">
-                                        <Truck className="h-2.5 w-2.5 mr-1" /> {isWithMe ? 'At My Desk' : (latestMovement?.movedTo || 'Registry')}
-                                    </Badge>
-                                    {!isLead && file.assignedTo && (
-                                        <span className="text-[9px] text-muted-foreground truncate italic">Lead: {file.assignedTo}</span>
-                                    )}
-                                </div>
-                                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0 group-hover:translate-x-0.5 transition-transform" />
-                            </div>
+                            {isPendingReceipt ? (
+                                <Button 
+                                    size="sm" 
+                                    className="w-full h-8 bg-amber-600 hover:bg-amber-700 text-white font-black uppercase text-[10px] tracking-widest gap-2 shadow-md shadow-amber-600/20"
+                                    onClick={(e) => handleConfirmReceipt(e, file)}
+                                    disabled={isConfirming}
+                                >
+                                    {isConfirming ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                                    Confirm Possession
+                                </Button>
+                            ) : (
+                                <>
+                                    <div className="flex items-center justify-between text-[9px] uppercase font-bold tracking-widest text-muted-foreground">
+                                        <span className="truncate max-w-[60%]">{file.category}</span>
+                                        <span className="shrink-0">{format(toDate(file.lastActivityAt || file.reportableDate || file.dateCreated)!, 'MMM d')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                            <Badge variant="outline" className="bg-muted/30 text-[9px] h-5 py-0 border-none shrink-0">
+                                                <Truck className="h-2.5 w-2.5 mr-1" /> {isWithMe ? 'At My Desk' : (latestMovement?.movedTo || 'Registry')}
+                                            </Badge>
+                                            {!isLead && file.assignedTo && (
+                                                <span className="text-[9px] text-muted-foreground truncate italic">Lead: {file.assignedTo}</span>
+                                            )}
+                                        </div>
+                                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </CardContent>
                 </Card>
-                {!isCompleted && !isSG && type !== 'historical' && (
+                {!isCompleted && !isSG && type !== 'historical' && !isPendingReceipt && (
                     <Button variant="ghost" size="icon" className={cn("absolute top-3 right-3 h-7 w-7 transition-all rounded-full bg-background/80 backdrop-blur-sm shadow-sm border", file.pinnedBy?.[attorney.id] ? "opacity-100 text-yellow-500 scale-110" : "opacity-0 group-hover:opacity-100 scale-100")} onClick={(e) => handleTogglePin(e, file.id)}>
                         <Star className={cn("h-3.5 w-3.5", file.pinnedBy?.[attorney.id] && "fill-current")} />
                     </Button>
@@ -920,6 +968,19 @@ export default function PortalDashboard() {
 
                         {!searchTerm && (
                             <div className="grid gap-10">
+                                {caseloads.arrivals.length > 0 && (
+                                    <section className="space-y-5 animate-in slide-in-from-top-4 duration-500">
+                                        <div className="flex items-center gap-3 bg-amber-500/10 w-fit px-4 py-2 rounded-lg border border-amber-500/20">
+                                            <Inbox className="h-4 w-4 text-amber-600 animate-bounce" />
+                                            <h3 className="text-[10px] font-black text-amber-700 uppercase tracking-[0.2em]">Unconfirmed Arrivals</h3>
+                                            <Badge className="bg-amber-600 text-white border-none h-4 px-1.5 py-0 text-[8px] font-bold">{caseloads.arrivals.length} New</Badge>
+                                        </div>
+                                        <div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                                            {caseloads.arrivals.map(file => <FileCard key={file.id} file={file} type="arrival" />)}
+                                        </div>
+                                    </section>
+                                )}
+
                                 {activeReminders.length > 0 && (
                                     <section className="space-y-5 min-w-0">
                                         <h3 className="text-[10px] font-black flex items-center gap-3 text-primary uppercase tracking-[0.2em] bg-primary/5 w-fit px-4 py-2 rounded-lg border border-primary/10">
