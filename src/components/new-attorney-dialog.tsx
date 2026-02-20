@@ -1,10 +1,11 @@
+
 'use client';
 
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { UserPlus, Loader2, ShieldCheck, Crown } from 'lucide-react';
+import { UserPlus, Loader2, ShieldCheck, Crown, HandIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -39,6 +40,7 @@ const FormSchema = z.object({
   group: z.string().optional(),
   isGroupHead: z.boolean().default(false),
   isSG: z.boolean().default(false),
+  isActingSG: z.boolean().default(false),
 });
 
 type FormData = z.infer<typeof FormSchema>;
@@ -70,6 +72,7 @@ export function NewAttorneyDialog({ isOpen, onOpenChange, attorney }: { isOpen: 
       group: '',
       isGroupHead: false,
       isSG: false,
+      isActingSG: false,
     },
   });
 
@@ -83,9 +86,10 @@ export function NewAttorneyDialog({ isOpen, onOpenChange, attorney }: { isOpen: 
         group: attorney.group || '',
         isGroupHead: attorney.isGroupHead || false,
         isSG: attorney.isSG || false,
+        isActingSG: attorney.isActingSG || false,
       });
     } else if (!isUpdateMode && isOpen) {
-      form.reset({ fullName: '', email: '', phoneNumber: '', rank: '', group: '', isGroupHead: false, isSG: false });
+      form.reset({ fullName: '', email: '', phoneNumber: '', rank: '', group: '', isGroupHead: false, isSG: false, isActingSG: false });
     }
   }, [attorney, isOpen, isUpdateMode, form]);
 
@@ -102,6 +106,8 @@ export function NewAttorneyDialog({ isOpen, onOpenChange, attorney }: { isOpen: 
         await authCreate(formData);
     }
   };
+
+  const isSG = form.watch('isSG');
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -189,7 +195,10 @@ export function NewAttorneyDialog({ isOpen, onOpenChange, attorney }: { isOpen: 
                             <FormControl>
                                 <Checkbox
                                     checked={field.value}
-                                    onCheckedChange={field.onChange}
+                                    onCheckedChange={(val) => {
+                                        field.onChange(val);
+                                        if (val) form.setValue('isActingSG', false);
+                                    }}
                                 />
                             </FormControl>
                             <div className="space-y-1 leading-none">
@@ -198,7 +207,35 @@ export function NewAttorneyDialog({ isOpen, onOpenChange, attorney }: { isOpen: 
                                     Designate as Solicitor General
                                 </FormLabel>
                                 <p className="text-[10px] text-yellow-700 uppercase tracking-tighter">
-                                    Executive access to all files and system analytics.
+                                    Permanent executive access to all files and system analytics.
+                                </p>
+                            </div>
+                        </FormItem>
+                    )}
+                />
+
+                <FormField
+                    control={form.control}
+                    name="isActingSG"
+                    render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4 bg-amber-50/50 border-amber-200">
+                            <FormControl>
+                                <Checkbox
+                                    checked={field.value}
+                                    onCheckedChange={(val) => {
+                                        field.onChange(val);
+                                        if (val) form.setValue('isSG', false);
+                                    }}
+                                    disabled={isSG}
+                                />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                                <FormLabel className="flex items-center gap-2 text-amber-800">
+                                    <HandIcon className="h-4 w-4 text-amber-600" />
+                                    Designate as Acting SG
+                                </FormLabel>
+                                <p className="text-[10px] text-amber-700 uppercase tracking-tighter">
+                                    Temporarily grants full executive oversight powers.
                                 </p>
                             </div>
                         </FormItem>
@@ -214,7 +251,7 @@ export function NewAttorneyDialog({ isOpen, onOpenChange, attorney }: { isOpen: 
                                 <Checkbox
                                     checked={field.value}
                                     onCheckedChange={field.onChange}
-                                    disabled={form.watch('isSG')}
+                                    disabled={form.watch('isSG') || form.watch('isActingSG')}
                                 />
                             </FormControl>
                             <div className="space-y-1 leading-none">

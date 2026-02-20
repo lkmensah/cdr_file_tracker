@@ -164,5 +164,6 @@ export type Attorney = {
   group?: string;
   isGroupHead?: boolean;
   isSG?: boolean;
+  isActingSG?: boolean;
   boundUid?: string;
 };

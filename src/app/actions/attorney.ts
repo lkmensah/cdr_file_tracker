@@ -1,3 +1,4 @@
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -23,6 +24,7 @@ const AttorneySchema = z.object({
     group: z.string().optional(),
     isGroupHead: z.boolean().optional(),
     isSG: z.boolean().optional(),
+    isActingSG: z.boolean().optional(),
 });
 
 export async function createAttorney(clientToken: string, formData: FormData) {
@@ -33,7 +35,8 @@ export async function createAttorney(clientToken: string, formData: FormData) {
     const rawData = {
         ...data,
         isGroupHead: formData.get('isGroupHead') === 'on' || formData.get('isGroupHead') === 'true',
-        isSG: formData.get('isSG') === 'on' || formData.get('isSG') === 'true'
+        isSG: formData.get('isSG') === 'on' || formData.get('isSG') === 'true',
+        isActingSG: formData.get('isActingSG') === 'on' || formData.get('isActingSG') === 'true'
     };
 
     const validated = AttorneySchema.safeParse(rawData);
@@ -58,6 +61,7 @@ export async function createAttorney(clientToken: string, formData: FormData) {
         await db.createAttorney(validated.data);
         const roles = [];
         if (validated.data.isSG) roles.push('Solicitor General');
+        if (validated.data.isActingSG) roles.push('Acting Solicitor General');
         if (validated.data.isGroupHead) roles.push('Group Head');
         
         await logUserActivity(userName, 'CREATE_ATTORNEY', `Added attorney: ${validated.data.fullName} ${roles.length > 0 ? `(${roles.join(', ')})` : ''}`);
@@ -76,7 +80,8 @@ export async function updateAttorney(clientToken: string, formData: FormData) {
     const rawData = {
         ...data,
         isGroupHead: formData.get('isGroupHead') === 'on' || formData.get('isGroupHead') === 'true',
-        isSG: formData.get('isSG') === 'on' || formData.get('isSG') === 'true'
+        isSG: formData.get('isSG') === 'on' || formData.get('isSG') === 'true',
+        isActingSG: formData.get('isActingSG') === 'on' || formData.get('isActingSG') === 'true'
     };
 
     const validated = AttorneySchema.safeParse(rawData);

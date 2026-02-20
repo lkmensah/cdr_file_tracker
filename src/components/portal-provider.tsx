@@ -16,6 +16,7 @@ interface PortalContextType {
     isAuthorized: boolean;
     isLoading: boolean;
     isSG: boolean;
+    isActingSG: boolean;
     login: (accessId: string) => Promise<{ success: boolean; error?: string }>;
     logout: () => void;
 }
@@ -112,8 +113,12 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     const isLoading = isAuthLoading || isCheckingSession;
     if (isLoading && pathname.startsWith('/portal/')) return <div className="min-h-screen flex items-center justify-center">Verifying Identity...</div>;
 
+    // Derived State: Acting SG is granted full SG executive status
+    const isSG = !!attorney?.isSG || !!attorney?.isActingSG;
+    const isActingSG = !!attorney?.isActingSG;
+
     return (
-        <PortalContext.Provider value={{ attorney, isAuthorized: !!attorney, isLoading, isSG: !!attorney?.isSG, login, logout }}>
+        <PortalContext.Provider value={{ attorney, isAuthorized: !!attorney, isLoading, isSG, isActingSG, login, logout }}>
             {children}
         </PortalContext.Provider>
     );

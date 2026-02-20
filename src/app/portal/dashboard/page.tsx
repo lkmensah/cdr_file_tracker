@@ -49,7 +49,8 @@ import {
     Users,
     FileDown,
     Filter,
-    User
+    User,
+    HandIcon
 } from 'lucide-react';
 import Link from 'next/link';
 import { 
@@ -149,7 +150,7 @@ const workloadChartConfig = {
 } satisfies ChartConfig;
 
 export default function PortalDashboard() {
-    const { attorney, logout, isSG } = usePortal();
+    const { attorney, logout, isSG, isActingSG } = usePortal();
     const { user } = useFirebase();
     const { toast } = useToast();
     const firestore = useFirestore();
@@ -690,8 +691,10 @@ export default function PortalDashboard() {
                     <div className="hidden sm:block">
                         <div className="flex items-center gap-2">
                             <h2 className="text-sm font-bold leading-none">{attorney?.fullName}</h2>
-                            {isSG ? (
+                            {attorney.isSG ? (
                                 <Badge className="bg-yellow-500 text-white border-yellow-600 text-[8px] h-4 uppercase font-bold px-1.5 py-0">Solicitor General</Badge>
+                            ) : isActingSG ? (
+                                <Badge className="bg-amber-500 text-white border-amber-600 text-[8px] h-4 uppercase font-bold px-1.5 py-0"><HandIcon className="h-3 w-3 mr-1" /> Acting SG</Badge>
                             ) : attorney.isGroupHead ? (
                                 <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-[8px] h-4 uppercase font-bold px-1.5 py-0"><ShieldCheck className="h-3 w-3 mr-1" /> Group Head</Badge>
                             ) : (
@@ -951,7 +954,7 @@ export default function PortalDashboard() {
 
                         <div className="space-y-8 min-w-0">
                             {isSG ? (
-                                <section className="space-y-4 min-w-0"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><h3 className="text-xs font-bold flex items-center gap-2 text-yellow-600 uppercase tracking-widest"><LayoutDashboard className="h-4 w-4" /> Master File Registry</h3><Badge variant="outline" className="text-[10px] h-5 border-yellow-500 text-yellow-700 bg-yellow-50 uppercase font-bold w-fit">Executive Visibility</Badge></div><div className="grid gap-4 grid-cols-1 min-w-0">{paginatedAllFiles.map(file => <FileCard key={file.id} file={file} type="all" />)}</div>{totalPages > 1 && (<div className="flex flex-col sm:flex-row items-center justify-between border-t pt-6 gap-4"><p className="text-xs text-muted-foreground">Showing <span className="font-bold text-foreground">{(currentPage - 1) * PAGE_SIZE + 1}</span> to <span className="font-bold text-foreground">{Math.min(currentPage * PAGE_SIZE, caseloads.all.length)}</span> of <span className="font-bold text-foreground">{caseloads.all.length}</span> records</p><div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-8"><ChevronLeft className="h-4 w-4 mr-1" />Previous</Button><div className="text-xs font-bold px-3 py-1 bg-muted rounded-md border">Page {currentPage} of {totalPages}</div><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="h-8">Next<ChevronRightIcon className="h-4 w-4 ml-1" /></Button></div></div>)}</section>
+                                <section className="space-y-4 min-w-0"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><h3 className="text-xs font-bold flex items-center gap-2 text-yellow-600 uppercase tracking-widest"><LayoutDashboard className="h-4 w-4" /> Master File Registry</h3><Badge variant="outline" className={cn("text-[10px] h-5 border-yellow-500 text-yellow-700 bg-yellow-50 uppercase font-bold w-fit", isActingSG && "border-amber-500 text-amber-700 bg-amber-50")}>{isActingSG ? 'Acting SG Oversight' : 'Executive Visibility'}</Badge></div><div className="grid gap-4 grid-cols-1 min-w-0">{paginatedAllFiles.map(file => <FileCard key={file.id} file={file} type="all" />)}</div>{totalPages > 1 && (<div className="flex flex-col sm:flex-row items-center justify-between border-t pt-6 gap-4"><p className="text-xs text-muted-foreground">Showing <span className="font-bold text-foreground">{(currentPage - 1) * PAGE_SIZE + 1}</span> to <span className="font-bold text-foreground">{Math.min(currentPage * PAGE_SIZE, caseloads.all.length)}</span> of <span className="font-bold text-foreground">{caseloads.all.length}</span> records</p><div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-8"><ChevronLeft className="h-4 w-4 mr-1" />Previous</Button><div className="text-xs font-bold px-3 py-1 bg-muted rounded-md border">Page {currentPage} of {totalPages}</div><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="h-8">Next<ChevronRightIcon className="h-4 w-4 ml-1" /></Button></div></div>)}</section>
                             ) : (
                                 <div className="space-y-8 min-w-0">
                                     {caseloads.pinned.length > 0 && <section className="space-y-4"><h3 className="text-xs font-bold flex items-center gap-2 text-yellow-600 uppercase tracking-widest"><Star className="h-4 w-4 fill-current" /> Pinned & Urgent Cases</h3><div className="grid gap-4 grid-cols-1">{caseloads.pinned.map(file => <FileCard key={file.id} file={file} type="pinned" />)}</div></section>}

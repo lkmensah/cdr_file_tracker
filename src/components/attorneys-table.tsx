@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -11,7 +12,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Users, Phone, Mail, MoreHorizontal, Pencil, MessageCircle, ShieldCheck, Crown, User } from 'lucide-react';
+import { Users, Phone, Mail, MoreHorizontal, Pencil, MessageCircle, ShieldCheck, Crown, User, HandIcon } from 'lucide-react';
 import { Button } from './ui/button';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from './ui/dropdown-menu';
 
@@ -59,7 +60,13 @@ export function AttorneysTable({ attorneys, onEdit }: { attorneys: Attorney[], o
                             <span className="text-[9px] uppercase font-bold">Solicitor General</span>
                         </Badge>
                     )}
-                    {attorney.isGroupHead && !attorney.isSG && (
+                    {attorney.isActingSG && (
+                        <Badge className="bg-amber-500 text-white hover:bg-amber-600 border-amber-600 gap-1 h-5 px-1.5 py-0">
+                            <HandIcon className="h-3 w-3" />
+                            <span className="text-[9px] uppercase font-bold">Acting SG</span>
+                        </Badge>
+                    )}
+                    {attorney.isGroupHead && !attorney.isSG && !attorney.isActingSG && (
                         <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 gap-1 h-5 px-1.5 py-0">
                             <ShieldCheck className="h-3 w-3" />
                             <span className="text-[9px] uppercase font-bold">Group Head</span>

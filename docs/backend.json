@@ -234,6 +234,13 @@
         },
         "group": {
           "type": "string"
+        },
+        "isSG": {
+          "type": "boolean"
+        },
+        "isActingSG": {
+          "type": "boolean",
+          "description": "Temporarily grants full executive oversight powers."
         }
       },
       "required": [
