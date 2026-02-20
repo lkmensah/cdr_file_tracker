@@ -12,7 +12,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Users, Phone, Mail, MoreHorizontal, Pencil, MessageCircle, ShieldCheck, Crown, User, HandIcon } from 'lucide-react';
+import { Users, Phone, Mail, MoreHorizontal, Pencil, MessageCircle, ShieldCheck, Crown, User, HandIcon, ShieldAlert } from 'lucide-react';
 import { Button } from './ui/button';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from './ui/dropdown-menu';
 
@@ -52,7 +52,7 @@ export function AttorneysTable({ attorneys, onEdit }: { attorneys: Attorney[], o
           {attorneys.map(attorney => (
             <TableRow key={attorney.id}>
               <TableCell className="font-medium">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     {attorney.fullName}
                     {attorney.isSG && (
                         <Badge className="bg-yellow-500 text-white hover:bg-yellow-600 border-yellow-600 gap-1 h-5 px-1.5 py-0">
@@ -70,6 +70,12 @@ export function AttorneysTable({ attorneys, onEdit }: { attorneys: Attorney[], o
                         <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 gap-1 h-5 px-1.5 py-0">
                             <ShieldCheck className="h-3 w-3" />
                             <span className="text-[9px] uppercase font-bold">Group Head</span>
+                        </Badge>
+                    )}
+                    {attorney.isActingGroupHead && !attorney.isSG && !attorney.isActingSG && (
+                        <Badge className="bg-blue-500 text-white hover:bg-blue-600 border-blue-600 gap-1 h-5 px-1.5 py-0">
+                            <ShieldAlert className="h-3 w-3" />
+                            <span className="text-[9px] uppercase font-bold">Acting GH</span>
                         </Badge>
                     )}
                 </div>

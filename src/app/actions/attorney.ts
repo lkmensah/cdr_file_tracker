@@ -23,6 +23,7 @@ const AttorneySchema = z.object({
     rank: z.string().optional(),
     group: z.string().optional(),
     isGroupHead: z.boolean().optional(),
+    isActingGroupHead: z.boolean().optional(),
     isSG: z.boolean().optional(),
     isActingSG: z.boolean().optional(),
 });
@@ -35,6 +36,7 @@ export async function createAttorney(clientToken: string, formData: FormData) {
     const rawData = {
         ...data,
         isGroupHead: formData.get('isGroupHead') === 'on' || formData.get('isGroupHead') === 'true',
+        isActingGroupHead: formData.get('isActingGroupHead') === 'on' || formData.get('isActingGroupHead') === 'true',
         isSG: formData.get('isSG') === 'on' || formData.get('isSG') === 'true',
         isActingSG: formData.get('isActingSG') === 'on' || formData.get('isActingSG') === 'true'
     };
@@ -63,6 +65,7 @@ export async function createAttorney(clientToken: string, formData: FormData) {
         if (validated.data.isSG) roles.push('Solicitor General');
         if (validated.data.isActingSG) roles.push('Acting Solicitor General');
         if (validated.data.isGroupHead) roles.push('Group Head');
+        if (validated.data.isActingGroupHead) roles.push('Acting Group Head');
         
         await logUserActivity(userName, 'CREATE_ATTORNEY', `Added attorney: ${validated.data.fullName} ${roles.length > 0 ? `(${roles.join(', ')})` : ''}`);
         revalidatePath('/attorneys');
@@ -80,6 +83,7 @@ export async function updateAttorney(clientToken: string, formData: FormData) {
     const rawData = {
         ...data,
         isGroupHead: formData.get('isGroupHead') === 'on' || formData.get('isGroupHead') === 'true',
+        isActingGroupHead: formData.get('isActingGroupHead') === 'on' || formData.get('isActingGroupHead') === 'true',
         isSG: formData.get('isSG') === 'on' || formData.get('isSG') === 'true',
         isActingSG: formData.get('isActingSG') === 'on' || formData.get('isActingSG') === 'true'
     };
@@ -131,7 +135,10 @@ export async function updateAttorney(clientToken: string, formData: FormData) {
             await db.propagateAttorneyGroupChange(newName, targetGroup);
             await logUserActivity(userName, 'ATTORNEY_GROUP_MIGRATION', `Migrated ${newName} to ${targetGroup}. All associated files moved for executive oversight.`);
         } else {
-            await logUserActivity(userName, 'UPDATE_ATTORNEY', `Updated attorney details: ${newName}`);
+            const roles = [];
+            if (validated.data.isActingSG) roles.push('Acting SG');
+            if (validated.data.isActingGroupHead) roles.push('Acting GH');
+            await logUserActivity(userName, 'UPDATE_ATTORNEY', `Updated attorney details: ${newName} ${roles.length > 0 ? `(${roles.join(', ')})` : ''}`);
         }
 
         revalidatePath('/attorneys');

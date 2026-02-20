@@ -235,6 +235,12 @@
         "group": {
           "type": "string"
         },
+        "isGroupHead": {
+          "type": "boolean"
+        },
+        "isActingGroupHead": {
+          "type": "boolean"
+        },
         "isSG": {
           "type": "boolean"
         },

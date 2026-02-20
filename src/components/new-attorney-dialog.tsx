@@ -5,7 +5,7 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { UserPlus, Loader2, ShieldCheck, Crown, HandIcon } from 'lucide-react';
+import { UserPlus, Loader2, ShieldCheck, Crown, HandIcon, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -39,6 +39,7 @@ const FormSchema = z.object({
   rank: z.string().optional(),
   group: z.string().optional(),
   isGroupHead: z.boolean().default(false),
+  isActingGroupHead: z.boolean().default(false),
   isSG: z.boolean().default(false),
   isActingSG: z.boolean().default(false),
 });
@@ -71,6 +72,7 @@ export function NewAttorneyDialog({ isOpen, onOpenChange, attorney }: { isOpen: 
       rank: '',
       group: '',
       isGroupHead: false,
+      isActingGroupHead: false,
       isSG: false,
       isActingSG: false,
     },
@@ -85,11 +87,12 @@ export function NewAttorneyDialog({ isOpen, onOpenChange, attorney }: { isOpen: 
         rank: attorney.rank || '',
         group: attorney.group || '',
         isGroupHead: attorney.isGroupHead || false,
+        isActingGroupHead: attorney.isActingGroupHead || false,
         isSG: attorney.isSG || false,
         isActingSG: attorney.isActingSG || false,
       });
     } else if (!isUpdateMode && isOpen) {
-      form.reset({ fullName: '', email: '', phoneNumber: '', rank: '', group: '', isGroupHead: false, isSG: false, isActingSG: false });
+      form.reset({ fullName: '', email: '', phoneNumber: '', rank: '', group: '', isGroupHead: false, isActingGroupHead: false, isSG: false, isActingSG: false });
     }
   }, [attorney, isOpen, isUpdateMode, form]);
 
@@ -108,6 +111,7 @@ export function NewAttorneyDialog({ isOpen, onOpenChange, attorney }: { isOpen: 
   };
 
   const isSG = form.watch('isSG');
+  const isGroupHead = form.watch('isGroupHead');
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -187,6 +191,7 @@ export function NewAttorneyDialog({ isOpen, onOpenChange, attorney }: { isOpen: 
             </div>
 
             <div className="grid gap-4">
+                {/* Executive Toggles */}
                 <FormField
                     control={form.control}
                     name="isSG"
@@ -197,17 +202,20 @@ export function NewAttorneyDialog({ isOpen, onOpenChange, attorney }: { isOpen: 
                                     checked={field.value}
                                     onCheckedChange={(val) => {
                                         field.onChange(val);
-                                        if (val) form.setValue('isActingSG', false);
+                                        if (val) {
+                                            form.setValue('isActingSG', false);
+                                            form.setValue('isActingGroupHead', false);
+                                        }
                                     }}
                                 />
                             </FormControl>
                             <div className="space-y-1 leading-none">
-                                <FormLabel className="flex items-center gap-2 text-yellow-800">
+                                <FormLabel className="flex items-center gap-2 text-yellow-800 font-bold">
                                     <Crown className="h-4 w-4 text-yellow-600" />
-                                    Designate as Solicitor General
+                                    Permanent Solicitor General
                                 </FormLabel>
                                 <p className="text-[10px] text-yellow-700 uppercase tracking-tighter">
-                                    Permanent executive access to all files and system analytics.
+                                    Full executive oversight across all groups.
                                 </p>
                             </div>
                         </FormItem>
@@ -224,24 +232,30 @@ export function NewAttorneyDialog({ isOpen, onOpenChange, attorney }: { isOpen: 
                                     checked={field.value}
                                     onCheckedChange={(val) => {
                                         field.onChange(val);
-                                        if (val) form.setValue('isSG', false);
+                                        if (val) {
+                                            form.setValue('isSG', false);
+                                            form.setValue('isActingGroupHead', false);
+                                        }
                                     }}
                                     disabled={isSG}
                                 />
                             </FormControl>
                             <div className="space-y-1 leading-none">
-                                <FormLabel className="flex items-center gap-2 text-amber-800">
+                                <FormLabel className="flex items-center gap-2 text-amber-800 font-bold">
                                     <HandIcon className="h-4 w-4 text-amber-600" />
                                     Designate as Acting SG
                                 </FormLabel>
                                 <p className="text-[10px] text-amber-700 uppercase tracking-tighter">
-                                    Temporarily grants full executive oversight powers.
+                                    Temporary full executive oversight powers.
                                 </p>
                             </div>
                         </FormItem>
                     )}
                 />
 
+                <Separator />
+
+                {/* Departmental Toggles */}
                 <FormField
                     control={form.control}
                     name="isGroupHead"
@@ -250,17 +264,52 @@ export function NewAttorneyDialog({ isOpen, onOpenChange, attorney }: { isOpen: 
                             <FormControl>
                                 <Checkbox
                                     checked={field.value}
-                                    onCheckedChange={field.onChange}
+                                    onCheckedChange={(val) => {
+                                        field.onChange(val);
+                                        if (val) form.setValue('isActingGroupHead', false);
+                                    }}
                                     disabled={form.watch('isSG') || form.watch('isActingSG')}
                                 />
                             </FormControl>
                             <div className="space-y-1 leading-none">
-                                <FormLabel className="flex items-center gap-2">
+                                <FormLabel className="flex items-center gap-2 font-bold">
                                     <ShieldCheck className="h-4 w-4 text-primary" />
-                                    Designate as Group Head
+                                    Permanent Group Head
                                 </FormLabel>
                                 <p className="text-[10px] text-muted-foreground uppercase tracking-tighter">
-                                    Grants oversight of all files within their specific group.
+                                    Oversight of all files within their specific group.
+                                </p>
+                            </div>
+                        </FormItem>
+                    )}
+                />
+
+                <FormField
+                    control={form.control}
+                    name="isActingGroupHead"
+                    render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4 bg-blue-50/50 border-blue-200">
+                            <FormControl>
+                                <Checkbox
+                                    checked={field.value}
+                                    onCheckedChange={(val) => {
+                                        field.onChange(val);
+                                        if (val) {
+                                            form.setValue('isGroupHead', false);
+                                            form.setValue('isSG', false);
+                                            form.setValue('isActingSG', false);
+                                        }
+                                    }}
+                                    disabled={isSG || isGroupHead || form.watch('isActingSG')}
+                                />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                                <FormLabel className="flex items-center gap-2 text-blue-800 font-bold">
+                                    <ShieldAlert className="h-4 w-4 text-blue-600" />
+                                    Designate as Acting Group Head
+                                </FormLabel>
+                                <p className="text-[10px] text-blue-700 uppercase tracking-tighter">
+                                    Temporary oversight of all files in their group.
                                 </p>
                             </div>
                         </FormItem>

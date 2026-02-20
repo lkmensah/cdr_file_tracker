@@ -163,6 +163,7 @@ export type Attorney = {
   rank?: string;
   group?: string;
   isGroupHead?: boolean;
+  isActingGroupHead?: boolean;
   isSG?: boolean;
   isActingSG?: boolean;
   boundUid?: string;

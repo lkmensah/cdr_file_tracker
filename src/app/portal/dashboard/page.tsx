@@ -50,7 +50,8 @@ import {
     FileDown,
     Filter,
     User,
-    HandIcon
+    HandIcon,
+    ShieldAlert
 } from 'lucide-react';
 import Link from 'next/link';
 import { 
@@ -231,7 +232,7 @@ export default function PortalDashboard() {
             
             const fileGroup = (file.group || 'no group yet').toLowerCase().trim();
             const isInMyGroup = (attorney.group || 'no group yet').toLowerCase().trim() === fileGroup;
-            const canOversight = attorney.isGroupHead && isInMyGroup;
+            const canOversight = (attorney.isGroupHead || attorney.isActingGroupHead) && isInMyGroup;
 
             const isPinned = file.pinnedBy?.[attorney.id] === true;
             const wasPreviouslyInvolved = file.movements?.some(m => m.movedTo?.toLowerCase().trim() === myName);
@@ -333,7 +334,7 @@ export default function PortalDashboard() {
             const latestMovement = movements[0];
             const isAtMyDesk = latestMovement?.movedTo?.toLowerCase().trim() === myName;
             const fileGroup = (file.group || 'no group yet').toLowerCase().trim();
-            const canOversight = attorney.isGroupHead && fileGroup === myGroup;
+            const canOversight = (attorney.isGroupHead || attorney.isActingGroupHead) && fileGroup === myGroup;
             const isPinned = file.pinnedBy?.[attorney.id] === true;
             const isHistorical = file.movements?.some(m => m.movedTo?.toLowerCase().trim() === myName);
             
@@ -422,7 +423,7 @@ export default function PortalDashboard() {
             const latestMovement = movements[0];
             const isAtMyDesk = latestMovement?.movedTo?.toLowerCase().trim() === myName;
             const fileGroup = (file.group || 'no group yet').toLowerCase().trim();
-            const isInMyGroup = attorney.isGroupHead && fileGroup === myGroup;
+            const isInMyGroup = (attorney.isGroupHead || attorney.isActingGroupHead) && fileGroup === myGroup;
             const isPinned = file.pinnedBy?.[attorney.id] === true;
             return (isLead || isCoAssignee || isAtMyDesk || isInMyGroup || isPinned);
         });
@@ -681,6 +682,8 @@ export default function PortalDashboard() {
         );
     }
 
+    const isGroupExecutive = attorney.isGroupHead || attorney.isActingGroupHead || isSG;
+
     return (
         <div className="min-h-screen bg-muted/20 pb-20 font-body">
             <header className="sticky top-0 z-10 bg-background border-b px-4 h-16 flex items-center justify-between shadow-sm">
@@ -697,6 +700,8 @@ export default function PortalDashboard() {
                                 <Badge className="bg-amber-500 text-white border-amber-600 text-[8px] h-4 uppercase font-bold px-1.5 py-0"><HandIcon className="h-3 w-3 mr-1" /> Acting SG</Badge>
                             ) : attorney.isGroupHead ? (
                                 <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-[8px] h-4 uppercase font-bold px-1.5 py-0"><ShieldCheck className="h-3 w-3 mr-1" /> Group Head</Badge>
+                            ) : attorney.isActingGroupHead ? (
+                                <Badge className="bg-blue-500 text-white border-blue-600 text-[8px] h-4 uppercase font-bold px-1.5 py-0"><ShieldAlert className="h-3 w-3 mr-1" /> Acting GH</Badge>
                             ) : (
                                 <Badge variant="secondary" className="bg-muted text-muted-foreground text-[8px] h-4 uppercase font-bold px-1.5 py-0">Practitioner</Badge>
                             )}
@@ -766,7 +771,7 @@ export default function PortalDashboard() {
                     <div className="flex items-center bg-muted/50 p-1 rounded-lg border ml-2">
                         <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setViewMode('list')}><List className="h-4 w-4" /><span className="hidden sm:inline">List</span></Button>
                         <Button variant={viewMode === 'calendar' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setViewMode('calendar')}><CalendarIcon className="h-4 w-4" /><span className="hidden sm:inline">Calendar</span></Button>
-                        {(attorney.isGroupHead || isSG) && (
+                        {isGroupExecutive && (
                             <Button variant={viewMode === 'monitoring' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setViewMode('monitoring')}><Activity className="h-4 w-4" /><span className="hidden sm:inline">{isSG ? 'Oversight' : 'Monitoring'}</span></Button>
                         )}
                     </div>
@@ -775,7 +780,7 @@ export default function PortalDashboard() {
             </header>
 
             <main className="container mx-auto p-3 md:p-4 lg:p-6 xl:p-8 space-y-8 min-w-0">
-                {viewMode === 'monitoring' && (attorney.isGroupHead || isSG) ? (
+                {viewMode === 'monitoring' && isGroupExecutive ? (
                     <section className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 min-w-0">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div>
@@ -961,7 +966,7 @@ export default function PortalDashboard() {
                                     {caseloads.primary.length > 0 && <section className="space-y-4"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><h3 className="text-xs font-bold flex items-center gap-2 text-muted-foreground uppercase tracking-widest"><Briefcase className="h-4 w-4" /> My Primary Caseload</h3><Button variant="outline" size="sm" className="h-8 gap-2 border-primary/20 text-primary hover:bg-primary/5" onClick={handleGenerateStatusReport} disabled={isReporting}>{isReporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}Download My Status Report</Button></div><div className="grid gap-4 grid-cols-1">{caseloads.primary.map(file => <FileCard key={file.id} file={file} type="primary" />)}</div></section>}
                                     {caseloads.collaborative.length > 0 && <section className="space-y-4"><h3 className="text-xs font-bold flex items-center gap-2 text-teal-600 uppercase tracking-widest"><Users className="h-4 w-4" /> Collaborative Team Cases</h3><div className="grid gap-4 grid-cols-1">{caseloads.collaborative.map(file => <FileCard key={file.id} file={file} type="collaborative" />)}</div></section>}
                                     {caseloads.action.length > 0 && <section className="space-y-4"><h3 className="text-xs font-bold flex items-center gap-2 text-muted-foreground uppercase tracking-widest"><UserCheck className="h-4 w-4" /> Files on My Desk</h3><div className="grid gap-4 grid-cols-1">{caseloads.action.map(file => <FileCard key={file.id} file={file} type="action" />)}</div></section>}
-                                    {caseloads.oversight.length > 0 && <section className="space-y-4"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2"><h3 className="text-xs font-bold flex items-center gap-2 text-purple-600 uppercase tracking-widest"><Users className="h-4 w-4" /> Group Oversight ({attorney.group || 'no group yet'})</h3><Badge variant="secondary" className="bg-purple-100 text-purple-700 text-[9px] uppercase font-bold w-fit">Group Head View</Badge></div><div className="grid gap-4 grid-cols-1">{caseloads.oversight.map(file => <FileCard key={file.id} file={file} type="oversight" />)}</div></section>}
+                                    {caseloads.oversight.length > 0 && <section className="space-y-4"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2"><h3 className="text-xs font-bold flex items-center gap-2 text-purple-600 uppercase tracking-widest"><Users className="h-4 w-4" /> Group Oversight ({attorney.group || 'no group yet'})</h3>{attorney.isActingGroupHead ? <Badge className="bg-blue-500 text-white text-[9px] uppercase font-bold w-fit">Acting Group Head View</Badge> : <Badge variant="secondary" className="bg-purple-100 text-purple-700 text-[9px] uppercase font-bold w-fit">Group Head View</Badge>}</div><div className="grid gap-4 grid-cols-1">{caseloads.oversight.map(file => <FileCard key={file.id} file={file} type="oversight" />)}</div></section>}
                                     {caseloads.historical.length > 0 && <section className="space-y-4 pt-4"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2"><h3 className="text-xs font-bold flex items-center gap-2 text-muted-foreground uppercase tracking-widest"><History className="h-4 w-4" /> My Previous Assignments (Historical)</h3><Badge variant="secondary" className="bg-muted text-muted-foreground text-[9px] uppercase font-bold w-fit border-none">Read-Only Access</Badge></div><div className="grid gap-4 grid-cols-1">{caseloads.historical.map(file => <FileCard key={file.id} file={file} type="historical" />)}</div></section>}
                                 </div>
                             )}
