@@ -229,7 +229,7 @@ export default function PortalDashboard() {
             const isAtMyDesk = latestMovement?.movedTo?.toLowerCase().trim() === myName;
             
             const fileGroup = (file.group || 'no group yet').toLowerCase().trim();
-            const isInMyGroup = (attorney.isGroupHead || attorney.isActingGroupHead) && isInMyGroup;
+            const canOversight = (attorney.isGroupHead || attorney.isActingGroupHead) && !!myGroup && myGroup !== 'no group yet' && fileGroup === myGroup;
 
             const isPinned = file.pinnedBy?.[attorney.id] === true;
             const wasPreviouslyInvolved = file.movements?.some(m => m.movedTo?.toLowerCase().trim() === myName);
@@ -331,7 +331,7 @@ export default function PortalDashboard() {
             const latestMovement = movements[0];
             const isAtMyDesk = latestMovement?.movedTo?.toLowerCase().trim() === myName;
             const fileGroup = (file.group || 'no group yet').toLowerCase().trim();
-            const canOversight = (attorney.isGroupHead || attorney.isActingGroupHead) && fileGroup === myGroup;
+            const canOversight = (attorney.isGroupHead || attorney.isActingGroupHead) && !!myGroup && myGroup !== 'no group yet' && fileGroup === myGroup;
             const isPinned = file.pinnedBy?.[attorney.id] === true;
             const isHistorical = file.movements?.some(m => m.movedTo?.toLowerCase().trim() === myName);
             
@@ -417,7 +417,7 @@ export default function PortalDashboard() {
             const latestMovement = movements[0];
             const isAtMyDesk = latestMovement?.movedTo?.toLowerCase().trim() === myName;
             const fileGroup = (file.group || 'no group yet').toLowerCase().trim();
-            const isInMyGroup = (attorney.isGroupHead || attorney.isActingGroupHead) && fileGroup === myGroup;
+            const isInMyGroup = (attorney.isGroupHead || attorney.isActingGroupHead) && !!myGroup && myGroup !== 'no group yet' && fileGroup === myGroup;
             const isPinned = file.pinnedBy?.[attorney.id] === true;
             return (isLead || isCoAssignee || isAtMyDesk || isInMyGroup || isPinned);
         });
