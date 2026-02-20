@@ -1,67 +1,86 @@
-# Ministry of Justice File Tracking System (GUIDELINES)
+# Ministry of Justice File Tracking System: Operational Manual
 
-This document provides a comprehensive overview of the application's features and the logical workflow for managing legal records and practitioner workspaces.
-
----
-
-## 1. System Overview & User Roles
-The application is a dual-environment system designed to bridge the physical Registry with a digital workspace.
-
-- **Administrative Registry (Main App):** Used by Registry staff to manage physical file lifecycles, log correspondence, and maintain oversight.
-- **Attorney Workspace (Portal):** A secure, identity-bound environment for practitioners to manage their caseload, collaborate, and draft documents.
+This guide provides a detailed, step-by-step workflow for all roles within the system. The application is divided into the **Administrative Registry** (Main App) and the **Attorney Portal** (Practitioner Workspace).
 
 ---
 
-## 2. Core Features
+## 1. Registry Staff (Administrative Registry)
+*Goal: Ensure accurate physical file tracking, reliable intake of correspondence, and oversight of practitioner access.*
 
-### A. Dashboard & Analytics
-- **Departmental Stats:** Real-time counts of Total Files, In-Transit items, and pending Correspondence.
-- **Workload Analytics:** Visual breakdown of "In Progress" vs. "Resolved" cases per attorney to monitor departmental capacity.
-- **Distribution Charts:** Visualizes case categories (Civil, Arbitration, etc.) for the current year.
-- **Urgent Queues:** Dedicated sections for **Physical File Requests** (attorneys awaiting folders) and **System-wide Deadlines**.
+### Step A: Incoming Mail & Court Processes (Intake)
+1. **Log First**: When mail or a process arrives, go to **"Incoming Mail"** or **"Court Processes"**.
+2. **Details**: Enter the subject, source (Sender/Court), and mandatory **Document No.**
+3. **Scan (Optional)**: If a digital scan exists, paste the SharePoint URL into the "Digital Scan Link" field.
+4. **Assignment**: 
+   - Use the **"Assign to File"** option in the actions menu.
+   - Search for the relevant **File Number**. 
+   - Once assigned, the item disappears from the "Unassigned" list and becomes a **Folio** in that case file.
 
-### B. File Management
-- **Lifecycle Tracking:** Files move from "Active" to "Completed" status.
-- **Collaboration:** Each file supports a **Lead Practitioner** and a **Collaborative Team (Co-Assignees)**.
-- **Judgment Debt:** Specialized tracking for financial exposure, including amounts in **GHS** and **USD**.
-- **Milestones:** Tracks case progression through standard legal stages (Pleadings, Trial, Execution).
+### Step B: Managing File Lifecycles
+1. **New Files**: If a case is new, go to **"Files" -> "New File"**. 
+2. **Classification**: Select the correct **Category**. For Civil cases, toggle **"Judgment Debt"** if there is a monetary claim.
+3. **Movement (Dispatch)**: 
+   - Locate the file in the "Files" table.
+   - Click **"Move File"**.
+   - Select the **Practitioner** (Attorney) or Office (e.g., "Registry").
+   - The file enters **"In Transit"** status until the practitioner acknowledges receipt.
 
-### C. Correspondence (Folios)
-- **Log First, Assign Later:** Incoming mail and court processes are logged as "Unassigned" items first.
-- **Folio History:** Once assigned to a file, correspondence is preserved in a chronological history.
-- **Digital Links:** Support for SharePoint or digital scan URLs to allow practitioners to view documents remotely.
-
-### D. Physical Movement & Possession
-- **Chain of Custody:** Every movement of a physical file is logged.
-- **In-Transit Logic:** Files "Moved" to a practitioner remain "In Transit" until the recipient confirms receipt in their portal.
-- **Possession Tracking:** The system always identifies the current physical holder of the folder.
-
----
-
-## 3. Workflow Logic
-
-1. **Intake:** Registry receives mail and logs it under **Incoming Mail** or **Court Processes**.
-2. **Assignment:** Registry identifies the relevant case and "Assigns" the item to a **File Number**.
-3. **Dispatch:** Registry logs a **Movement** to a practitioner. The file enters "In Transit" status.
-4. **Possession:** The practitioner receives the physical folder and clicks **Confirm Receipt** in their portal.
-5. **Activity:** Practitioners use the portal to:
-   - Set **Deadlines** and **Reminders**.
-   - Exchange **Internal Instructions** with the Registry or team.
-   - Create **Legal Drafts** using AI-assisted tools.
-   - Export drafts into official **Word (.docx)** format (Letters/Memos).
-6. **Handover:** When finished, the file is moved back to Registry or to another office.
-7. **Resolution:** The case is marked **Completed**, and the record is moved to the **Archives**.
+### Step C: Administrative Oversight
+1. **Attorneys Registry**: Maintain the list of all practitioners. Ensure their **Group** and **Rank** are accurate.
+2. **Device Resets**: If an attorney cannot access their portal (new computer/browser), go to **"Attorneys" -> "Actions" -> "Reset Device Access"**.
+3. **Audit Log**: Use this section to review every action taken by staff for transparency.
 
 ---
 
-## 4. Attorney Portal Access
-Practitioners access the portal at `/portal` using an alphanumeric **Access ID**.
-- **Device Binding:** To ensure security, an Access ID is bound to the first device that uses it. Subsequent access from different devices is restricted unless authorized by the Registry.
-- **Workspace:** Attorneys see only their files, messages, and upcoming deadlines.
+## 2. Practitioners (Attorney Portal)
+*Goal: Manage assigned caseload, coordinate with the team, and draft legal documents.*
+
+### Step A: Secure Access
+1. **Login**: Enter your alphanumeric **Access ID** at `/portal`.
+2. **Binding**: The system will automatically "lock" your ID to the hardware you are currently using. You cannot use a different laptop or phone without a Registry reset.
+
+### Step B: Daily Workflow
+1. **My Active Files**: View files where you are the **Lead Practitioner**.
+2. **Shared Files**: View files that are physically at your desk or where you are a **Co-Assignee**.
+3. **Real-time Alerts**: Keep your dashboard tab open. A **"Beep"** sound will play whenever a new Folio, Internal Instruction, or File Movement is recorded for your cases.
+4. **Confirming Receipt**: When a physical folder arrives at your desk, find it in your portal and click **"Confirm Receipt"**. This notifies the Registry that you now have physical possession.
+
+### Step C: Collaboration & Drafting
+1. **Drafts**: Use the "Drafts" tab to create Defenses, Opinions, or Letters.
+2. **AI Tools**: Click **"AI Tools" -> "Legal Polish"** to refine your language or **"Summarize"** to condense content.
+3. **Export**: Once finished, click **"Export as Letter"** or **"Export as Memo"**. The system will generate a professional **Word (.docx)** document with official Ministry headers and formatting.
+4. **Messaging**: Use the "Messaging" tab to send **Internal Instructions** to your team or the Registry.
 
 ---
 
-## 5. Registry Tools
-- **Global Search:** Search by File Number, Suit Number, Subject, or Document No. across the entire system.
-- **Census:** A registry used to maintain a record of file ownership for annual reporting.
-- **Audit Log:** A permanent record of all user activities for accountability and system transparency.
+## 3. Group Heads (Departmental Oversight)
+*Goal: Monitor group performance and ensure no cases are stagnant.*
+
+1. **Group Hub**: Access the **"Monitoring"** view on your dashboard.
+2. **Workload Analysis**: Review the **"Files per Practitioner"** chart to see who is overloaded.
+3. **Stagnant Exception Report**: Identify files that have had **zero activity for 14 days**. These will appear in red.
+4. **Directives**: If a case is stagnant, open the file and issue an **Instruction** to the Lead Practitioner. It will be permanently logged as a directive from the Group Head.
+
+---
+
+## 4. Solicitor General (Master Oversight)
+*Goal: Strategic monitoring of the entire Ministry's legal burden and financial exposure.*
+
+1. **Solicitor General's View**: Your dashboard shows the **Master File List** across all departments.
+2. **Master Oversight Hub**:
+   - **Cross-Group Analysis**: Compare active vs. resolved cases across all divisions (Civil, Arbitration, etc.).
+   - **Departmental Burden Rank**: Identify which departments are at highest capacity.
+3. **Judgment Debt Monitoring**:
+   - Access the **"Reports"** section in the main app.
+   - Filter by **"Judgment Debt Cases Only"**.
+   - Review the total financial exposure in **GHS** and **USD**.
+4. **Master Status Report**: Click **"Download Master Status Report"** to get a comprehensive PDF of every active file in the Ministry, organized by department and possession level.
+
+---
+
+## Security Appendix: Device Binding
+To ensure that Access IDs are not shared or used on unauthorized personal devices:
+- **Registry**: Generates Access ID.
+- **Practitioner**: Logs in. The first device used becomes the **only** authorized device.
+- **System**: Blocks any login from a different browser or hardware UID.
+- **Admin Reset**: Required only when hardware is replaced or deep browser caches are cleared.
