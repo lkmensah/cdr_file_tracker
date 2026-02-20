@@ -346,7 +346,7 @@ export default function PortalDashboard() {
     }, [allFiles, attorney, isSG]);
 
     const notifications = React.useMemo(() => {
-        if (!myRelatedFiles || !attorney) return [];
+        if (!notifications || !attorney) return [];
         const notes: { id: string; fileId: string; fileNumber: string; message: string; timestamp: Date; type: 'communication' | 'folio' | 'draft' | 'movement' }[] = [];
         const now = new Date();
         const last24h = subHours(now, 24);
@@ -648,17 +648,15 @@ export default function PortalDashboard() {
                                 <div className="flex gap-1 shrink-0">
                                     {isCompleted ? (
                                         <Badge variant="secondary" className="text-[8px] uppercase h-4 bg-green-100 text-green-800 border-green-200">Resolved</Badge>
-                                    ) : isSG ? (
-                                        <Badge variant="outline" className="text-[8px] uppercase h-4 border-yellow-500 text-yellow-700 bg-yellow-50/50">Executive</Badge>
                                     ) : isLead ? (
                                         <Badge variant="outline" className="text-[8px] uppercase h-4">Lead</Badge>
                                     ) : isTeam ? (
                                         <Badge variant="outline" className="text-[8px] uppercase h-4 border-teal-500 text-teal-700 bg-teal-50">Team</Badge>
                                     ) : type === 'oversight' ? (
                                         <Badge variant="secondary" className="text-[8px] uppercase h-4 bg-purple-100 text-purple-700 border-purple-200">Oversight</Badge>
-                                    ) : (
+                                    ) : isWithMe ? (
                                         <Badge variant="secondary" className="text-[8px] uppercase h-4 bg-blue-50 text-blue-700 border-blue-100">At Desk</Badge>
-                                    )}
+                                    ) : null}
                                 </div>
                             </div>
                             
