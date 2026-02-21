@@ -10,7 +10,7 @@ import { collection, doc, updateDoc } from 'firebase/firestore';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, ShieldAlert } from 'lucide-react';
 import { signInAnonymously } from 'firebase/auth';
-import { updateAttorneyPresence } from '@/app/actions/attorney';
+import { updateAttorneyPresence, setAttorneyOffline } from '@/app/actions/attorney';
 
 interface PortalContextType {
     attorney: Attorney | null;
@@ -122,9 +122,15 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     };
 
     const logout = () => {
+        const currentId = attorney?.id;
         setAttorney(null);
         Cookies.remove('portal_access_id');
         router.push('/portal');
+        
+        // Signal offline status to server immediately
+        if (currentId) {
+            setAttorneyOffline(currentId).catch(() => {});
+        }
     };
 
     if (authFailed) {

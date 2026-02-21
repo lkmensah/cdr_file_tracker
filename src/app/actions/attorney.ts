@@ -199,3 +199,15 @@ export async function updateAttorneyPresence(id: string) {
         return { success: false };
     }
 }
+
+export async function setAttorneyOffline(id: string) {
+    try {
+        const firestore = getFirestore(initializeAdmin());
+        await firestore.collection('attorneys').doc(id).update({ 
+            lastActiveAt: null 
+        });
+        return { success: true };
+    } catch (error) {
+        return { success: false };
+    }
+}
