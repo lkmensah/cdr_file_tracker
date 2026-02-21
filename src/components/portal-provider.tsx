@@ -121,16 +121,24 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: 'Invalid Access ID.' };
     };
 
-    const logout = () => {
+    const logout = async () => {
         const currentId = attorney?.id;
+        
+        // 1. Signal offline status to server immediately and await it
+        if (currentId) {
+            try {
+                await setAttorneyOffline(currentId);
+            } catch (e) {
+                console.error("Logout Signal Error:", e);
+            }
+        }
+
+        // 2. Clear local session
         setAttorney(null);
         Cookies.remove('portal_access_id');
-        router.push('/portal');
         
-        // Signal offline status to server immediately
-        if (currentId) {
-            setAttorneyOffline(currentId).catch(() => {});
-        }
+        // 3. Redirect
+        router.push('/portal');
     };
 
     if (authFailed) {

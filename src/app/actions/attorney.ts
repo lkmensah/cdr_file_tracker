@@ -7,7 +7,7 @@ import * as db from '@/lib/data';
 import { logUserActivity } from '@/lib/audit';
 import { initializeAdmin } from '@/firebase/admin';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 async function verifyUser(clientToken: string) {
     const adminAuth = getAuth(initializeAdmin());
@@ -188,11 +188,9 @@ export async function toggleAttorneyBlock(clientToken: string, id: string, isBlo
 
 export async function updateAttorneyPresence(id: string) {
     try {
-        // This is a lower-security action, we don't verify admin token here 
-        // as it's called by practitioners periodically.
         const firestore = getFirestore(initializeAdmin());
         await firestore.collection('attorneys').doc(id).update({ 
-            lastActiveAt: new Date() 
+            lastActiveAt: FieldValue.serverTimestamp() 
         });
         return { success: true };
     } catch (error) {

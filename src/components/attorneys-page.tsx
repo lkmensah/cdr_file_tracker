@@ -43,7 +43,8 @@ export function AttorneysPage({
   const activeNowCount = useMemo(() => {
     return initialAttorneys.filter(a => {
         const lastActive = toDate(a.lastActiveAt);
-        return lastActive && differenceInMinutes(new Date(), lastActive) < 10 && !a.isBlocked;
+        // Tighter 5-minute window for "Live" status since heartbeats are every 4 minutes
+        return lastActive && differenceInMinutes(new Date(), lastActive) < 5 && !a.isBlocked;
     }).length;
   }, [initialAttorneys]);
 
@@ -99,8 +100,7 @@ export function AttorneysPage({
                         <p className="text-xl font-bold text-destructive">{blockedCount}</p>
                     </div>
                 </CardContent>
-            </Card>
-        </div>
+            </div>
 
         <Card>
             <CardHeader>

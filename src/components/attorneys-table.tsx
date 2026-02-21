@@ -96,14 +96,14 @@ export function AttorneysTable({ attorneys, onEdit }: { attorneys: Attorney[], o
         <TableBody>
           {attorneys.map(attorney => {
             const lastActive = toDate(attorney.lastActiveAt);
-            const isOnline = lastActive && differenceInMinutes(new Date(), lastActive) < 10;
+            const isOnline = lastActive && differenceInMinutes(new Date(), lastActive) < 5;
             
             return (
             <TableRow key={attorney.id} className={cn(attorney.isBlocked && "bg-destructive/5 opacity-80")}>
               <TableCell className="px-2 text-center">
                 <div className="flex justify-center">
                     <div className={cn(
-                        "h-2.5 w-2.5 rounded-full ring-2 ring-background",
+                        "h-2.5 w-2.5 rounded-full ring-2 ring-background transition-colors duration-500",
                         attorney.isBlocked ? "bg-destructive" : isOnline ? "bg-green-500 animate-pulse" : "bg-muted-foreground/30"
                     )} title={attorney.isBlocked ? "Blocked" : isOnline ? "Active Now" : "Offline"} />
                 </div>
