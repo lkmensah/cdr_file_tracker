@@ -166,3 +166,36 @@ export async function resetDeviceBinding(clientToken: string, id: string) {
         return { message: 'Failed to reset device binding.' };
     }
 }
+
+export async function toggleAttorneyBlock(clientToken: string, id: string, isBlocked: boolean) {
+    const userName = await verifyUser(clientToken);
+    try {
+        const attorney = await db.getAttorneyById(id);
+        if (!attorney) return { message: 'Attorney not found.' };
+        
+        const firestore = getFirestore(initializeAdmin());
+        await firestore.collection('attorneys').doc(id).update({ isBlocked });
+        
+        const actionLabel = isBlocked ? 'BLOCKED' : 'UNBLOCKED';
+        await logUserActivity(userName, 'TOGGLE_ATTORNEY_BLOCK', `${actionLabel} portal access for: ${attorney.fullName}`);
+        
+        revalidatePath('/attorneys');
+        return { message: `Success! Attorney has been ${isBlocked ? 'blocked' : 'unblocked'}.` };
+    } catch (error) {
+        return { message: 'Failed to update access status.' };
+    }
+}
+
+export async function updateAttorneyPresence(id: string) {
+    try {
+        // This is a lower-security action, we don't verify admin token here 
+        // as it's called by practitioners periodically.
+        const firestore = getFirestore(initializeAdmin());
+        await firestore.collection('attorneys').doc(id).update({ 
+            lastActiveAt: new Date() 
+        });
+        return { success: true };
+    } catch (error) {
+        return { success: false };
+    }
+}

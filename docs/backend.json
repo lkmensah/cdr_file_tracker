@@ -247,6 +247,15 @@
         "isActingSG": {
           "type": "boolean",
           "description": "Temporarily grants full executive oversight powers."
+        },
+        "isBlocked": {
+          "type": "boolean",
+          "description": "Temporarily prevent this attorney from accessing the portal."
+        },
+        "lastActiveAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp of the attorney's last system activity for presence monitoring."
         }
       },
       "required": [
@@ -377,6 +386,6 @@
         }
       }
     ],
-    "reasoning": "Co-assignees added to File entity to allow collaborative legal teams to work on the same record while keeping a single source of truth."
+    "reasoning": "Presence monitoring and blocking capability added to Attorney entity for system usage visibility and temporary security control."
   }
 }

@@ -8,8 +8,9 @@ import type { Attorney } from '@/lib/types';
 import { useCollection, useFirestore, useMemoFirebase, useFirebase } from '@/firebase';
 import { collection, doc, updateDoc } from 'firebase/firestore';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, ShieldAlert } from 'lucide-react';
 import { signInAnonymously } from 'firebase/auth';
+import { updateAttorneyPresence } from '@/app/actions/attorney';
 
 interface PortalContextType {
     attorney: Attorney | null;
@@ -56,12 +57,35 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
 
     const { data: allAttorneys } = useCollection<Attorney>(attorneysQuery);
 
+    // Heartbeat mechanism for usage monitoring
+    React.useEffect(() => {
+        if (!attorney) return;
+
+        // Send initial heartbeat
+        updateAttorneyPresence(attorney.id);
+
+        // Send periodic heartbeats every 4 minutes (keep-alive)
+        const interval = setInterval(() => {
+            updateAttorneyPresence(attorney.id);
+        }, 1000 * 60 * 4);
+
+        return () => clearInterval(interval);
+    }, [attorney]);
+
     React.useEffect(() => {
         const savedAccessId = Cookies.get('portal_access_id');
         if (savedAccessId && allAttorneys) {
             const found = allAttorneys.find(a => a.accessId === savedAccessId);
-            if (found) setAttorney(found);
-            else Cookies.remove('portal_access_id');
+            if (found) {
+                // Real-time security: Force logout if blocked
+                if (found.isBlocked) {
+                    logout();
+                } else {
+                    setAttorney(found);
+                }
+            } else {
+                Cookies.remove('portal_access_id');
+            }
             setIsCheckingSession(false);
         } else if (!savedAccessId) {
             setIsCheckingSession(false);
@@ -74,6 +98,11 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
         const found = allAttorneys.find(a => a.accessId?.toUpperCase() === accessId.trim().toUpperCase());
         
         if (found) {
+            // Block Check
+            if (found.isBlocked) {
+                return { success: false, error: 'Your access has been temporarily suspended by the Registry.' };
+            }
+
             // Identity Binding: Lock the Access ID to this specific anonymous UID
             if (found.boundUid && found.boundUid !== user.uid) {
                 return { success: false, error: 'Access denied. This ID is bound to another device.' };

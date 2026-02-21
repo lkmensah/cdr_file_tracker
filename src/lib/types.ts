@@ -168,4 +168,6 @@ export type Attorney = {
   isSG?: boolean;
   isActingSG?: boolean;
   boundUid?: string;
+  isBlocked?: boolean;
+  lastActiveAt?: Date;
 };

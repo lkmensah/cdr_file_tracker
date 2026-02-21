@@ -12,11 +12,11 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Users, Phone, Mail, MoreHorizontal, Pencil, MessageCircle, ShieldCheck, Crown, User, HandIcon, ShieldAlert, SmartphoneNfc, Loader2 } from 'lucide-react';
+import { Users, Phone, Mail, MoreHorizontal, Pencil, MessageCircle, ShieldCheck, Crown, User, HandIcon, ShieldAlert, SmartphoneNfc, Loader2, Ban, Unlock, Activity } from 'lucide-react';
 import { Button } from './ui/button';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from './ui/dropdown-menu';
 import { useAuthAction } from '@/hooks/use-auth-action';
-import { resetDeviceBinding } from '@/app/actions/attorney';
+import { resetDeviceBinding, toggleAttorneyBlock } from '@/app/actions/attorney';
 import { useToast } from '@/hooks/use-toast';
 import { useProfile } from './auth-provider';
 import {
@@ -29,16 +29,35 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { cn } from '@/lib/utils';
+import { differenceInMinutes } from 'date-fns';
+
+const toDate = (value: any): Date | null => {
+    if (!value) return null;
+    if (value.toDate) return value.toDate(); // Firestore Timestamp
+    if (value instanceof Date) return value;
+    const d = new Date(value);
+    if (!isNaN(d.getTime())) return d;
+    return null;
+};
 
 export function AttorneysTable({ attorneys, onEdit }: { attorneys: Attorney[], onEdit: (a: Attorney) => void }) {
   const { toast } = useToast();
   const { isAdmin } = useProfile();
   const [resetTarget, setResetTarget] = React.useState<Attorney | null>(null);
+  const [blockTarget, setBlockTarget] = React.useState<Attorney | null>(null);
 
   const { exec: authReset, isLoading: isResetting } = useAuthAction(resetDeviceBinding, {
     onSuccess: (res) => {
         toast({ title: res.message });
         setResetTarget(null);
+    }
+  });
+
+  const { exec: authToggleBlock, isLoading: isBlocking } = useAuthAction(toggleAttorneyBlock, {
+    onSuccess: (res) => {
+        toast({ title: res.message });
+        setBlockTarget(null);
     }
   });
 
@@ -65,6 +84,7 @@ export function AttorneysTable({ attorneys, onEdit }: { attorneys: Attorney[], o
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-[40px]"></TableHead>
             <TableHead>Full Name</TableHead>
             <TableHead>Access ID</TableHead>
             <TableHead>Rank</TableHead>
@@ -74,11 +94,26 @@ export function AttorneysTable({ attorneys, onEdit }: { attorneys: Attorney[], o
           </TableRow>
         </TableHeader>
         <TableBody>
-          {attorneys.map(attorney => (
-            <TableRow key={attorney.id}>
+          {attorneys.map(attorney => {
+            const lastActive = toDate(attorney.lastActiveAt);
+            const isOnline = lastActive && differenceInMinutes(new Date(), lastActive) < 10;
+            
+            return (
+            <TableRow key={attorney.id} className={cn(attorney.isBlocked && "bg-destructive/5 opacity-80")}>
+              <TableCell className="px-2 text-center">
+                <div className="flex justify-center">
+                    <div className={cn(
+                        "h-2.5 w-2.5 rounded-full ring-2 ring-background",
+                        attorney.isBlocked ? "bg-destructive" : isOnline ? "bg-green-500 animate-pulse" : "bg-muted-foreground/30"
+                    )} title={attorney.isBlocked ? "Blocked" : isOnline ? "Active Now" : "Offline"} />
+                </div>
+              </TableCell>
               <TableCell className="font-medium">
                 <div className="flex items-center gap-2 flex-wrap">
-                    {attorney.fullName}
+                    <span className={cn(attorney.isBlocked && "line-through text-muted-foreground")}>{attorney.fullName}</span>
+                    {attorney.isBlocked && (
+                        <Badge variant="destructive" className="h-4 px-1.5 py-0 text-[8px] uppercase font-black tracking-widest">Blocked</Badge>
+                    )}
                     {attorney.isSG && (
                         <Badge className="bg-yellow-500 text-white hover:bg-yellow-600 border-yellow-600 gap-1 h-5 px-1.5 py-0">
                             <Crown className="h-3 w-3" />
@@ -162,10 +197,26 @@ export function AttorneysTable({ attorneys, onEdit }: { attorneys: Attorney[], o
                             <Pencil className="mr-2 h-4 w-4" /> Edit Details
                         </DropdownMenuItem>
                         
-                        {isAdmin && attorney.boundUid && (
-                            <DropdownMenuItem onClick={() => setResetTarget(attorney)} className="text-blue-600 focus:text-blue-700">
-                                <SmartphoneNfc className="mr-2 h-4 w-4" /> Reset Device Access
-                            </DropdownMenuItem>
+                        {isAdmin && (
+                            <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => setBlockTarget(attorney)} className={cn(attorney.isBlocked ? "text-green-600" : "text-destructive")}>
+                                    {attorney.isBlocked ? (
+                                        <>
+                                            <Unlock className="mr-2 h-4 w-4" /> Unblock Portal
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Ban className="mr-2 h-4 w-4" /> Block Portal Access
+                                        </>
+                                    )}
+                                </DropdownMenuItem>
+                                {attorney.boundUid && (
+                                    <DropdownMenuItem onClick={() => setResetTarget(attorney)} className="text-blue-600 focus:text-blue-700">
+                                        <SmartphoneNfc className="mr-2 h-4 w-4" /> Reset Device Access
+                                    </DropdownMenuItem>
+                                )}
+                            </>
                         )}
 
                         {attorney.phoneNumber && (
@@ -181,7 +232,7 @@ export function AttorneysTable({ attorneys, onEdit }: { attorneys: Attorney[], o
                 </DropdownMenu>
               </TableCell>
             </TableRow>
-          ))}
+          )})}
         </TableBody>
       </Table>
     </div>
@@ -200,6 +251,31 @@ export function AttorneysTable({ attorneys, onEdit }: { attorneys: Attorney[], o
                 <AlertDialogAction onClick={() => resetTarget && authReset(resetTarget.id)} disabled={isResetting} className="bg-blue-600 hover:bg-blue-700">
                     {isResetting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Confirm Reset
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
+
+    <AlertDialog open={!!blockTarget} onOpenChange={(open) => !open && setBlockTarget(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>{blockTarget?.isBlocked ? 'Restore Access?' : 'Block Portal Access?'}</AlertDialogTitle>
+                <AlertDialogDescription>
+                    {blockTarget?.isBlocked 
+                        ? `Restore workspace access for ${blockTarget?.fullName}. They will be able to log in immediately.`
+                        : `This will immediately disconnect ${blockTarget?.fullName} from the portal and prevent any further logins until unblocked.`
+                    }
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel disabled={isBlocking}>Cancel</AlertDialogCancel>
+                <AlertDialogAction 
+                    onClick={() => blockTarget && authToggleBlock(blockTarget.id, !blockTarget.isBlocked)} 
+                    disabled={isBlocking} 
+                    className={blockTarget?.isBlocked ? "bg-green-600 hover:bg-green-700" : "bg-destructive hover:bg-destructive/90"}
+                >
+                    {isBlocking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {blockTarget?.isBlocked ? 'Unblock Access' : 'Confirm Block'}
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
