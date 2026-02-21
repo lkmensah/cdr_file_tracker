@@ -100,7 +100,8 @@ export function AttorneysPage({
                         <p className="text-xl font-bold text-destructive">{blockedCount}</p>
                     </div>
                 </CardContent>
-            </div>
+            </Card>
+        </div>
 
         <Card>
             <CardHeader>
