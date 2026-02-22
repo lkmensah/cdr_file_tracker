@@ -1,7 +1,6 @@
-
 'use client';
 
-import type { CorrespondenceFile, Letter, Movement, Attorney, CaseReminder, FileRequest, Reminder } from '@/lib/types';
+import type { CorrespondenceFile, Letter, Movement, Attorney, CaseReminder, FileRequest, Reminder, UserProfile } from '@/lib/types';
 import { Folder, Mail, Scale, Truck, CheckCircle2, Loader2, UserCheck, Users, Calendar, MessageCircle, MessageSquare, FileText, AlertCircle, HandIcon, Clock, Bell, History, Zap, AlarmClock, Send, ShieldCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DashboardChart } from './dashboard-chart';
@@ -28,7 +27,7 @@ import { useAuthAction } from '@/hooks/use-auth-action';
 import { confirmFileReceipt, toggleReminder, cancelFileRequest, markFileAsViewed, toggleGeneralReminder, recordNotification } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase, useDoc } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
+import { collection, doc, query, where } from 'firebase/firestore';
 import { format, isPast, isToday, formatDistanceToNow, subHours, isAfter, addHours } from 'date-fns';
 import { Badge } from './ui/badge';
 import { useProfile } from './auth-provider';
@@ -73,7 +72,6 @@ export function Dashboard({
   const [currentTime, setCurrentTime] = React.useState(new Date());
   const { toast } = useToast();
 
-  // Heartbeat to trigger "Due Soon" logic while page is open
   React.useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
@@ -82,7 +80,9 @@ export function Dashboard({
   const attorneysQuery = useMemoFirebase(() => firestore ? collection(firestore, 'attorneys') : null, [firestore]);
   const { data: attorneys } = useCollection<Attorney>(attorneysQuery);
 
-  // Identify the Solicitor General's name for filtering
+  const secretariatQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '==', 'staff@sg_sec')) : null, [firestore]);
+  const { data: secretariatUsers } = useCollection<UserProfile>(secretariatQuery);
+
   const sgName = React.useMemo(() => {
     return attorneys?.find(a => a.isSG)?.fullName;
   }, [attorneys]);
@@ -99,7 +99,6 @@ export function Dashboard({
         });
         const latest = sorted[0];
         if (latest && !latest.receivedAt && latest.movedTo?.toLowerCase() !== 'registry') {
-            // Filter: SG Secretariat staff only see files going to SG
             if (isSGSec && sgName && latest.movedTo?.toLowerCase() !== sgName.toLowerCase()) {
                 return [];
             }
@@ -149,7 +148,6 @@ export function Dashboard({
     });
   }, [initialFiles, generalReminders]);
 
-  // Triggered Reminders: Due in the next 60 minutes
   const triggeredReminders = React.useMemo(() => {
     const oneHourFromNow = addHours(currentTime, 1);
     return allUpcomingReminders.filter(reminder => {
@@ -192,19 +190,31 @@ export function Dashboard({
     const destination = file.latestMovement.movedTo;
     const targetAttorney = attorneys?.find(a => a.fullName.toLowerCase() === destination.toLowerCase());
     
-    if (targetAttorney?.phoneNumber) {
+    let notificationPhone = targetAttorney?.phoneNumber;
+    let recipientLabel = targetAttorney?.fullName || destination;
+
+    // Special Logic for SG Secretariat Routing
+    if (targetAttorney?.isSG) {
+        const firstSec = secretariatUsers?.find(u => !!u.phoneNumber);
+        if (firstSec) {
+            notificationPhone = firstSec.phoneNumber;
+            recipientLabel = `SG Secretariat (${firstSec.fullName})`;
+        }
+    }
+    
+    if (notificationPhone) {
         if (profile?.phoneNumber) {
             await authRecordNotification(file.fileNumber, file.latestMovement.id, profile.phoneNumber);
         }
 
         const truncatedSubject = truncate(file.subject, 60);
         const message = encodeURIComponent(
-            `Hello ${targetAttorney.fullName},\n\nThe following physical file has been delivered to your desk:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease log in to your Attorney Portal immediately to verify and confirm receipt of the physical folder.\n\nThank you.`
+            `Hello ${recipientLabel},\n\nThe following physical file has been delivered to your office:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease verify and confirm receipt of the physical folder in the tracking system.\n\nThank you.`
         );
-        window.open(`https://wa.me/${targetAttorney.phoneNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
-        toast({ title: "WhatsApp Alert Opened", description: `Please send the message to notify ${targetAttorney.fullName}.` });
+        window.open(`https://wa.me/${notificationPhone.replace(/\D/g, '')}?text=${message}`, '_blank');
+        toast({ title: "WhatsApp Alert Opened", description: `Notifying ${recipientLabel}.` });
     } else {
-        toast({ variant: 'destructive', title: "No Contact Info", description: `${destination} has no registered phone number.` });
+        toast({ variant: 'destructive', title: "No Contact Info", description: `${recipientLabel} has no registered phone number.` });
     }
   };
 
@@ -262,7 +272,18 @@ export function Dashboard({
   const handleNotifyBatch = async (destination: string, files: typeof inTransitFiles) => {
     const targetAttorney = attorneys?.find(a => a.fullName.toLowerCase() === destination.toLowerCase());
     
-    if (targetAttorney?.phoneNumber) {
+    let notificationPhone = targetAttorney?.phoneNumber;
+    let recipientLabel = targetAttorney?.fullName || destination;
+
+    if (targetAttorney?.isSG) {
+        const firstSec = secretariatUsers?.find(u => !!u.phoneNumber);
+        if (firstSec) {
+            notificationPhone = firstSec.phoneNumber;
+            recipientLabel = `SG Secretariat (${firstSec.fullName})`;
+        }
+    }
+    
+    if (notificationPhone) {
         if (profile?.phoneNumber) {
             for (const f of files) {
                 await authRecordNotification(f.fileNumber, f.latestMovement.id, profile.phoneNumber);
@@ -271,18 +292,17 @@ export function Dashboard({
 
         const fileList = files.map(f => `• *${f.fileNumber}* - ${truncate(f.subject, 60)}`).join('\n');
         const message = encodeURIComponent(
-            `Hello ${targetAttorney.fullName},\n\nThe following physical file(s) have been delivered to your desk:\n\n${fileList}\n\nPlease log in to your Attorney Portal immediately to verify and confirm receipt of the physical folder(s).\n\nThank you.`
+            `Hello ${recipientLabel},\n\nThe following physical file(s) have been delivered to your office:\n\n${fileList}\n\nPlease log in to verify and confirm receipt of the physical folder(s).\n\nThank you.`
         );
-        window.open(`https://wa.me/${targetAttorney.phoneNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
+        window.open(`https://wa.me/${notificationPhone.replace(/\D/g, '')}?text=${message}`, '_blank');
         toast({ title: "Batch Notification Opened" });
     } else {
-        toast({ variant: 'destructive', title: "No Contact Info", description: `${destination} has no registered phone number.` });
+        toast({ variant: 'destructive', title: "No Contact Info", description: `${recipientLabel} has no registered phone number.` });
     }
   };
 
   return (
     <div className="container mx-auto space-y-8 pb-12 min-w-0 px-3 md:px-4 lg:px-6 xl:px-8">
-        {/* Statistics Grid */}
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard title="Total Files" value={initialFiles.length} icon={Folder} />
             <StatCard title={isSGSec ? "Arrivals for SG" : "Files in Transit"} value={inTransitFiles.length} icon={Truck} colorClass={inTransitFiles.length > 0 ? "text-yellow-500" : ""} onClick={() => setIsInTransitOpen(true)} />
@@ -304,7 +324,6 @@ export function Dashboard({
             </div>
         )}
 
-        {/* Action Center: Triggered Reminders (Next 60 Minutes) */}
         {!isSGSec && triggeredReminders.length > 0 && (
             <div className="animate-in fade-in slide-in-from-top-4 duration-500">
                 <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4 sm:p-6 shadow-md relative overflow-hidden">
@@ -350,13 +369,11 @@ export function Dashboard({
             </div>
         )}
         
-        {/* Primary Analytics */}
         <div className="grid gap-8 grid-cols-1 lg:grid-cols-2">
             <DashboardChart files={initialFiles} />
             <WorkloadAnalytics files={initialFiles} attorneys={attorneys || []} />
         </div>
 
-        {/* Physical File Requests Queue */}
         <div className="grid gap-8 grid-cols-1 min-w-0">
             <Card className="shadow-sm border-primary/10 overflow-hidden">
                 <CardHeader className="pb-3 border-b">
@@ -427,7 +444,6 @@ export function Dashboard({
             </Card>
         </div>
 
-        {/* System-wide Deadline Monitoring */}
         {!isSGSec && (
             <div className="grid gap-8 min-w-0">
                 <Card className="shadow-sm border-primary/10 overflow-hidden">
@@ -455,8 +471,6 @@ export function Dashboard({
                                     {allUpcomingReminders.length > 0 ? allUpcomingReminders.map(reminder => {
                                         const d = toDate(reminder.date)!;
                                         const isOverdue = isPast(d) && !isToday(d);
-                                        
-                                        // Identify items due in the next hour
                                         const isDueSoon = d > currentTime && d <= addHours(currentTime, 1);
 
                                         return (
@@ -513,7 +527,6 @@ export function Dashboard({
             </div>
         )}
 
-        {/* Dialogs */}
         <Dialog open={isInTransitOpen} onOpenChange={setIsInTransitOpen}>
             <DialogContent className="w-[95vw] sm:max-w-4xl max-h-[85vh] overflow-y-auto">
                 <DialogHeader>

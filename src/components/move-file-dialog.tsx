@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Loader2, Users, Briefcase, Info } from 'lucide-react';
+import { Calendar as CalendarIcon, Loader2, Users, Briefcase, Info, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -77,9 +77,17 @@ export function MoveFileDialog({ isOpen, onOpenChange, files }: MoveFileDialogPr
 
   const attorneyOptions = React.useMemo(() => {
     const list = (attorneys || []).map(a => ({
-        label: a.fullName,
+        label: a.isSG ? `SOLICITOR GENERAL (${a.fullName})` : a.fullName,
         value: a.fullName
     }));
+    
+    // Sort to put SG at the top after Registry
+    list.sort((a, b) => {
+        if (a.label.startsWith('SOLICITOR GENERAL')) return -1;
+        if (b.label.startsWith('SOLICITOR GENERAL')) return 1;
+        return a.label.localeCompare(b.label);
+    });
+
     if (!list.some(o => o.value === 'Registry')) {
         list.unshift({ label: 'Registry', value: 'Registry' });
     }
@@ -88,7 +96,6 @@ export function MoveFileDialog({ isOpen, onOpenChange, files }: MoveFileDialogPr
 
   const groupOptions = React.useMemo(() => {
     const groups = new Set<string>();
-    // Pre-seed with default to ensure uniqueness
     groups.add('no group yet');
     
     attorneys?.forEach(a => { 
@@ -251,7 +258,7 @@ export function MoveFileDialog({ isOpen, onOpenChange, files }: MoveFileDialogPr
                     <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                       <PopoverTrigger asChild>
                         <FormControl>
-                          <Button variant={'outline'} className={cn('w-full pl-3 text-left font-normal', !field.value && 'text-muted-foreground')}>
+                          <Button variant={'outline'} className={cn('w-full pl-3 text-left font-normal h-9', !field.value && 'text-muted-foreground')}>
                             {field.value ? format(field.value, 'PPP') : <span>Pick a date</span>}
                             <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                           </Button>

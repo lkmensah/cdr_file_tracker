@@ -1,8 +1,7 @@
-
 'use client';
 
 import * as React from 'react';
-import type { CorrespondenceFile, Letter, Movement, Attorney } from '@/lib/types';
+import type { CorrespondenceFile, Letter, Movement, Attorney, UserProfile } from '@/lib/types';
 import {
   Table,
   TableBody,
@@ -29,8 +28,8 @@ import { MoveFileDialog } from './move-file-dialog';
 import { BatchPickupDialog } from './batch-pickup-dialog';
 import { format, isAfter, subHours } from 'date-fns';
 import { useDoc, useFirestore, useMemoFirebase, useCollection } from '@/firebase';
-import { doc, collection } from 'firebase/firestore';
-import { deleteFile, toggleFileStatus, markFileAsViewed } from '@/app/actions';
+import { doc, collection, query, where } from 'firebase/firestore';
+import { deleteFile, toggleFileStatus, markFileAsViewed, recordNotification } from '@/app/actions';
 import { useAuthAction } from '@/hooks/use-auth-action';
 import { useToast } from '@/hooks/use-toast';
 import { useProfile } from './auth-provider';
@@ -72,6 +71,9 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
   const attorneysQuery = useMemoFirebase(() => firestore ? collection(firestore, 'attorneys') : null, [firestore]);
   const { data: attorneys } = useCollection<Attorney>(attorneysQuery);
 
+  const secretariatQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '==', 'staff@sg_sec')) : null, [firestore]);
+  const { data: secretariatUsers } = useCollection<UserProfile>(secretariatQuery);
+
   const { exec: authToggleStatus, isLoading: isTogglingStatus } = useAuthAction(toggleFileStatus, {
     onSuccess: (result) => {
         toast({ title: result.message });
@@ -86,6 +88,7 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
   });
 
   const { exec: authMarkViewed } = useAuthAction(markFileAsViewed);
+  const { exec: authRecordNotification } = useAuthAction(recordNotification);
 
   const selectedFileRef = useMemoFirebase(() => {
     if (!firestore || !selectedFileId) return null;
@@ -147,7 +150,7 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
     }
   }
 
-  const handleNotifyWhatsApp = (file: CorrespondenceFile) => {
+  const handleNotifyWhatsApp = async (file: CorrespondenceFile) => {
     const movements = Array.isArray(file.movements) ? file.movements : [];
     const latest = [...movements].sort((a, b) => {
         const dateA = toDate(a.date)?.getTime() || 0;
@@ -159,15 +162,32 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
     if (latest) {
         const destination = latest.movedTo;
         const targetAttorney = attorneys?.find(a => a.fullName.toLowerCase() === destination.toLowerCase());
-        if (targetAttorney?.phoneNumber) {
+        
+        let notificationPhone = targetAttorney?.phoneNumber;
+        let recipientLabel = targetAttorney?.fullName || destination;
+
+        // Routing for SG Secretariat
+        if (targetAttorney?.isSG) {
+            const firstSec = secretariatUsers?.find(u => !!u.phoneNumber);
+            if (firstSec) {
+                notificationPhone = firstSec.phoneNumber;
+                recipientLabel = `SG Secretariat (${firstSec.fullName})`;
+            }
+        }
+
+        if (notificationPhone) {
+            if (profile?.phoneNumber) {
+                await authRecordNotification(file.fileNumber, latest.id, profile.phoneNumber);
+            }
+
             const truncatedSubject = truncate(file.subject, 60);
             const message = encodeURIComponent(
-                `Hello ${targetAttorney.fullName},\n\nThe following physical file has been delivered to your desk:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease log in to your Attorney Portal immediately to verify and confirm receipt of the physical folder.\n\nThank you.`
+                `Hello ${recipientLabel},\n\nThe following physical file has been delivered to your office:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease verify and confirm receipt of the physical folder in the system.\n\nThank you.`
             );
-            window.open(`https://wa.me/${targetAttorney.phoneNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
-            toast({ title: "WhatsApp Alert Opened" });
+            window.open(`https://wa.me/${notificationPhone.replace(/\D/g, '')}?text=${message}`, '_blank');
+            toast({ title: "WhatsApp Alert Opened", description: `Notifying ${recipientLabel}.` });
         } else {
-            toast({ variant: 'destructive', title: "No Contact Info", description: `${destination} has no registered phone number.` });
+            toast({ variant: 'destructive', title: "No Contact Info", description: `${recipientLabel} has no registered phone number.` });
         }
     }
   };

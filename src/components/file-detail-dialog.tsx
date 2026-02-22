@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import type { CorrespondenceFile, Letter, CorrespondenceType, Movement, Attorney, InternalInstruction, Attachment } from '@/lib/types';
+import type { CorrespondenceFile, Letter, CorrespondenceType, Movement, Attorney, InternalInstruction, Attachment, UserProfile } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -41,7 +41,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Combobox } from './ui/combobox';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { collection, query, orderBy, where } from 'firebase/firestore';
 import { Progress } from './ui/progress';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 
@@ -85,7 +85,7 @@ const getDynamicDateLabel = (type: CorrespondenceType) => {
     }
 };
 
-const LetterDetails = ({ letter, index, total, fileNumber, onDataChange }: { letter: Letter, index: number, total: number, fileNumber: string, onDataChange: () => void }) => {
+const LetterDetailsInner = ({ letter, index, total, fileNumber, onDataChange }: { letter: Letter, index: number, total: number, fileNumber: string, onDataChange: () => void }) => {
     const { user } = useUser();
     const { isAdmin } = useProfile();
     const [isUnassignAlertOpen, setIsUnassignAlertOpen] = React.useState(false);
@@ -178,7 +178,7 @@ const LetterDetails = ({ letter, index, total, fileNumber, onDataChange }: { let
     )
 }
 
-const MovementEditForm = ({ movement, fileNumber, attorneys, onCancel, onSuccess }: { movement: Movement, fileNumber: string, attorneys: Attorney[] | null, onCancel: () => void, onSuccess: () => void }) => {
+const MovementEditFormInner = ({ movement, fileNumber, attorneys, onCancel, onSuccess }: { movement: Movement, fileNumber: string, attorneys: Attorney[] | null, onCancel: () => void, onSuccess: () => void }) => {
     const { toast } = useToast();
     const { exec: authUpdate, isLoading: isUpdating } = useAuthAction(updateMovementInFile, {
         onSuccess: (res) => {
@@ -279,14 +279,18 @@ const MovementEditForm = ({ movement, fileNumber, attorneys, onCancel, onSuccess
     );
 };
 
-const MovementDetails = ({ movement, index, total, fileNumber, fileSubject, isLatest, onDataChange }: { movement: Movement, index: number, total: number, fileNumber: string, fileSubject: string, isLatest: boolean, onDataChange: () => void }) => {
+const MovementDetailsInner = ({ movement, index, total, fileNumber, fileSubject, isLatest, onDataChange }: { movement: Movement, index: number, total: number, fileNumber: string, fileSubject: string, isLatest: boolean, onDataChange: () => void }) => {
     const firestore = useFirestore();
     const { toast } = useToast();
     const { isAdmin, profile } = useProfile();
     const [isDeleteAlertOpen, setIsDeleteAlertOpen] = React.useState(false);
     const [isEditMode, setIsEditMode] = React.useState(false);
+    
     const attorneysQuery = useMemoFirebase(() => firestore ? collection(firestore, 'attorneys') : null, [firestore]);
     const { data: attorneys } = useCollection<Attorney>(attorneysQuery);
+
+    const secretariatQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '==', 'staff@sg_sec')) : null, [firestore]);
+    const { data: secretariatUsers } = useCollection<UserProfile>(secretariatQuery);
     
     const { exec: authRecord, isLoading: isNotifying } = useAuthAction(recordNotification);
     const { exec: authConfirm, isLoading: isConfirming } = useAuthAction(confirmFileReceipt, { onSuccess: (r) => { if (r && r.message?.includes('Success')) { toast({ title: 'Receipt Confirmed' }); onDataChange(); } } });
@@ -296,19 +300,31 @@ const MovementDetails = ({ movement, index, total, fileNumber, fileSubject, isLa
         const dest = movement.movedTo;
         const target = attorneys?.find(a => a.fullName.toLowerCase() === dest.toLowerCase());
         
-        if (target?.phoneNumber) {
+        let notificationPhone = target?.phoneNumber;
+        let recipientLabel = target?.fullName || dest;
+
+        // Route to SG Secretariat if destination is SG
+        if (target?.isSG) {
+            const firstSec = secretariatUsers?.find(u => !!u.phoneNumber);
+            if (firstSec) {
+                notificationPhone = firstSec.phoneNumber;
+                recipientLabel = `SG Secretariat (${firstSec.fullName})`;
+            }
+        }
+        
+        if (notificationPhone) {
             if (profile?.phoneNumber) {
                 await authRecord(fileNumber, movement.id, profile.phoneNumber);
             }
 
             const truncatedSubject = truncate(fileSubject, 60);
             const msg = encodeURIComponent(
-                `Hello ${target.fullName},\n\nThe following physical file has been delivered to your desk:\n\n• *${fileNumber}* - ${truncatedSubject}\n\nPlease log in to your Attorney Portal immediately to verify and confirm receipt of the physical folder.\n\nThank you.`
+                `Hello ${recipientLabel},\n\nThe following physical file has been delivered to your office:\n\n• *${fileNumber}* - ${truncatedSubject}\n\nPlease verify and confirm receipt of the physical folder in the system.\n\nThank you.`
             );
-            window.open(`https://wa.me/${target.phoneNumber.replace(/\D/g, '')}?text=${msg}`, '_blank');
-            toast({ title: "WhatsApp Alert Opened" });
+            window.open(`https://wa.me/${notificationPhone.replace(/\D/g, '')}?text=${msg}`, '_blank');
+            toast({ title: "WhatsApp Alert Opened", description: `Notifying ${recipientLabel}.` });
         } else {
-            toast({ variant: 'destructive', title: "No Contact Info", description: `${dest} has no registered phone number.` });
+            toast({ variant: 'destructive', title: "No Contact Info", description: `${recipientLabel} has no registered phone number.` });
         }
     };
 
@@ -320,7 +336,7 @@ const MovementDetails = ({ movement, index, total, fileNumber, fileSubject, isLa
         return (
             <div className="bg-muted/30 p-4 rounded-lg border border-primary/20 animate-in fade-in slide-in-from-top-1">
                 <div className="flex justify-between items-center mb-4"><h4 className="font-semibold text-sm">Edit Movement #{total - index}</h4><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsEditMode(false)}><Trash2 className="h-4 w-4" /></Button></div>
-                <MovementEditForm 
+                <MovementEditFormInner 
                     movement={movement} 
                     fileNumber={fileNumber} 
                     attorneys={attorneys} 
@@ -344,6 +360,13 @@ const MovementDetails = ({ movement, index, total, fileNumber, fileSubject, isLa
         </div>
     );
 };
+
+interface FileDetailDialogProps {
+    file?: CorrespondenceFile | null;
+    isOpen: boolean;
+    onOpenChange: (isOpen: boolean) => void;
+    onDataChange: () => void;
+}
 
 export function FileDetailDialog({ file: initialFile, isOpen, onOpenChange, onDataChange }: FileDetailDialogProps) {
   const { profile, isAdmin } = useProfile();
@@ -405,7 +428,7 @@ export function FileDetailDialog({ file: initialFile, isOpen, onOpenChange, onDa
             <Tabs defaultValue="history"><TabsList className="grid grid-cols-3 mb-4"><TabsTrigger value="communications">Communications</TabsTrigger><TabsTrigger value="attachments">Attachments ({sortedAttachments.length})</TabsTrigger><TabsTrigger value="history">History</TabsTrigger></TabsList>
                 <TabsContent value="communications" className="space-y-4"><h3 className="text-lg font-semibold flex items-center gap-2"><MessageSquare className="h-5 w-5 text-primary" />Case Communication</h3><div className="bg-muted/30 p-4 rounded-lg space-y-4 border border-primary/10"><div className="space-y-2"><h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Send Message to Current Possessor ({currentPossessorName})</h4><Textarea placeholder="Ask about file location, current status, or request its return..." value={inquiryText} onChange={(e) => setInquiryText(e.target.value)} className="bg-background min-h-[80px]" /><Button className="w-full h-9 gap-2" onClick={handleSendInquiry} disabled={isSendingInquiry || !inquiryText.trim()}>{isSendingInquiry ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Send Message</Button></div><div className="space-y-3 max-h-[250px] overflow-y-auto pr-2">{sortedInstructions.length > 0 ? sortedInstructions.map(msg => (<div key={msg.id} className="bg-background p-3 rounded-md border text-sm relative group"><div className="flex items-center justify-between mb-1"><div className="flex items-center gap-1.5 flex-wrap"><span className="text-[10px] font-bold text-primary uppercase">{msg.from}</span><span className="text-muted-foreground text-[10px]">→</span><span className="text-[10px] font-bold text-muted-foreground uppercase">{msg.to}</span></div><span className="text-[9px] text-muted-foreground font-mono">{toDate(msg.date) ? format(toDate(msg.date)!, 'MMM d, p') : 'N/A'}</span></div><p className="leading-relaxed text-muted-foreground italic">"{msg.text}"</p></div>)) : (<p className="text-center text-[10px] text-muted-foreground py-4 border border-dashed rounded-md">No communication history for this file.</p>)}</div></div></TabsContent>
                 <TabsContent value="attachments" className="space-y-4"><h3 className="text-lg font-semibold flex items-center gap-2"><Paperclip className="h-5 w-5 text-primary" />Practitioner Works & Files</h3><div className="grid gap-3">{sortedAttachments.length > 0 ? sortedAttachments.map(att => (<Card key={att.id}><CardContent className="p-4 flex items-center justify-between"><div className="flex items-center gap-3"><div className="p-2 bg-muted rounded"><FileIcon className="h-5 w-5 text-muted-foreground" /></div><div><p className="text-sm font-semibold leading-none">{att.name}</p><p className="text-[10px] text-muted-foreground uppercase mt-1.5">Uploaded by {att.uploadedBy} • {format(toDate(att.uploadedAt)!, 'p, MMM d')}</p></div></div><div className="flex items-center gap-1"><Button variant="ghost" size="icon" onClick={() => handleViewDocument(att)} title="View Document"><Eye className="h-4 w-4" /></Button>{(isAdmin || profile?.fullName === att.uploadedBy) && (<Button variant="ghost" size="icon" onClick={() => setAttachmentToDelete(att)} className="text-destructive hover:bg-destructive/10" title="Delete Document"><Trash2 className="h-4 w-4" /></Button>)}</div></CardContent></Card>)) : (<p className="text-sm text-muted-foreground text-center py-10 border border-dashed rounded-md">No attachments uploaded for this case yet.</p>)}</div></TabsContent>
-                <TabsContent value="history" className="space-y-6 pt-4"><div className="space-y-6"><h3 className="text-lg font-semibold flex items-center gap-2"><History className="h-5 w-5 text-primary" />Movement History</h3>{movements.length > 0 ? movements.map((m, i) => (<React.Fragment key={m.id}><MovementDetails movement={m} index={i} total={movements.length} fileNumber={initialFile.fileNumber} fileSubject={initialFile.subject} isLatest={i === 0} onDataChange={onDataChange} />{i < movements.length - 1 && <Separator />}</React.Fragment>)) : (<p className="text-sm text-muted-foreground">No movement history for this file yet.</p>)}</div><Separator /><div className="space-y-6"><h3 className="text-lg font-semibold flex items-center gap-2"><FileText className="h-5 w-5 text-primary" />Folios</h3>{sortedLetters.length > 0 ? sortedLetters.map((l, i) => (<React.Fragment key={l.id}><LetterDetails letter={l} index={i} total={sortedLetters.length} fileNumber={initialFile.fileNumber} onDataChange={onDataChange} />{i < sortedLetters.length - 1 && <Separator />}</React.Fragment>)) : (<p className="text-sm text-muted-foreground">No correspondence in this file yet.</p>)}</div></TabsContent>
+                <TabsContent value="history" className="space-y-6 pt-4"><div className="space-y-6"><h3 className="text-lg font-semibold flex items-center gap-2"><History className="h-5 w-5 text-primary" />Movement History</h3>{movements.length > 0 ? movements.map((m, i) => (<React.Fragment key={m.id}><MovementDetailsInner movement={m} index={i} total={movements.length} fileNumber={initialFile.fileNumber} fileSubject={initialFile.subject} isLatest={i === 0} onDataChange={onDataChange} />{i < movements.length - 1 && <Separator />}</React.Fragment>)) : (<p className="text-sm text-muted-foreground">No movement history for this file yet.</p>)}</div><Separator /><div className="space-y-6"><h3 className="text-lg font-semibold flex items-center gap-2"><FileText className="h-5 w-5 text-primary" />Folios</h3>{sortedLetters.length > 0 ? sortedLetters.map((l, i) => (<React.Fragment key={l.id}><LetterDetailsInner letter={l} index={i} total={sortedLetters.length} fileNumber={initialFile.fileNumber} onDataChange={onDataChange} />{i < sortedLetters.length - 1 && <Separator />}</React.Fragment>)) : (<p className="text-sm text-muted-foreground">No correspondence in this file yet.</p>)}</div></TabsContent>
             </Tabs>
         </div>
       </DialogContent>
