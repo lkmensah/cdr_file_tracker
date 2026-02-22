@@ -549,9 +549,14 @@ export function Dashboard({
                                         <span className="text-sm text-muted-foreground ml-2 shrink-0">({files.length})</span>
                                     </div>
                                     {!isSGSec && (
-                                        <Button size="sm" variant="outline" className="h-8 bg-background shrink-0 w-full sm:w-auto gap-2" onClick={() => handleNotifyBatch(destination, files)}>
+                                        <Button 
+                                            size="sm" 
+                                            variant="outline" 
+                                            className="h-8 bg-background shrink-0 w-full sm:w-auto gap-2" 
+                                            onClick={() => handleNotifyBatch(destination, files)}
+                                        >
                                             <MessageCircle className="h-3.5 w-3.5 text-green-600" />
-                                            Notify via WhatsApp
+                                            {files.some(f => f.latestMovement.notifiedByPhone) ? 'Remind via WhatsApp' : 'Notify via WhatsApp'}
                                         </Button>
                                     )}
                                 </div>
