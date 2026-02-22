@@ -592,7 +592,7 @@ export function Dashboard({
                                                             ) : (
                                                                 <Button size="sm" variant="ghost" className="h-8 hover:bg-green-50 hover:text-green-700 gap-1.5" onClick={() => handleNotifyAttorney(file)}>
                                                                     <Send className="h-3 w-3" />
-                                                                    Notify
+                                                                    {file.latestMovement.notifiedByPhone ? 'Remind' : 'Notify'}
                                                                 </Button>
                                                             )}
                                                         </TableCell>

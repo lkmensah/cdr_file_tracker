@@ -373,7 +373,7 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
                                             disabled={isCompleted}
                                         >
                                             <MessageCircle className="mr-2 h-4 w-4 text-green-600" />
-                                            Notify via WhatsApp
+                                            {latestMovement.notifiedByPhone ? 'Remind via WhatsApp' : 'Notify via WhatsApp'}
                                         </DropdownMenuItem>
                                     )}
                                     <DropdownMenuItem 
