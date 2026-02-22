@@ -556,7 +556,7 @@ export function Dashboard({
                                             onClick={() => handleNotifyBatch(destination, files)}
                                         >
                                             <MessageCircle className="h-3.5 w-3.5 text-green-600" />
-                                            {files.some(f => f.latestMovement.notifiedByPhone) ? 'Remind via WhatsApp' : 'Notify via WhatsApp'}
+                                            {files.some(f => f.latestMovement.notifiedByPhone) ? 'Remind' : 'Notify'}
                                         </Button>
                                     )}
                                 </div>
