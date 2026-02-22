@@ -9,6 +9,7 @@ import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { NewFile } from './new-file-dialog';
 import { Button } from './ui/button';
+import { useProfile } from './auth-provider';
 
 const PAGE_SIZE = 25;
 
@@ -22,6 +23,7 @@ export function FilesPage({
   const [fileToEdit, setFileToEdit] = useState<CorrespondenceFile | null>(null);
   const [isEditFileOpen, setIsEditFileOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const { isSGSec } = useProfile();
 
   useEffect(() => {
     setFiles(initialFiles);
@@ -82,7 +84,7 @@ export function FilesPage({
                 </p>
               </div>
               <div className="flex-shrink-0">
-                <NewFile />
+                {!isSGSec && <NewFile />}
               </div>
             </div>
             <div className="relative mt-4">
@@ -134,7 +136,7 @@ export function FilesPage({
             )}
         </CardContent>
         </Card>
-        {isEditFileOpen && <NewFile isOpen={isEditFileOpen} onOpenChange={handleEditFileOpenChange} file={fileToEdit} />}
+        {isEditFileOpen && !isSGSec && <NewFile isOpen={isEditFileOpen} onOpenChange={handleEditFileOpenChange} file={fileToEdit} />}
     </div>
   );
 }

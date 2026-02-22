@@ -191,7 +191,7 @@
         },
         "role": {
           "type": "string",
-          "enum": ["admin", "staff"],
+          "enum": ["admin", "staff", "staff@sg_sec"],
           "description": "The access level of the user."
         },
         "passwordChangeRequired": {
@@ -386,6 +386,6 @@
         }
       }
     ],
-    "reasoning": "Presence monitoring and blocking capability added to Attorney entity for system usage visibility and temporary security control."
+    "reasoning": "SG Secretariat role staff@sg_sec added to handle administrative confirmation of physical folders at the executive level."
   }
 }

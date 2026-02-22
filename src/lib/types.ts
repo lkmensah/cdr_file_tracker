@@ -1,7 +1,7 @@
 
 export type CorrespondenceType = 'Incoming' | 'Outgoing' | 'Filing' | 'Court Process' | 'Memo';
 
-export type UserRole = 'admin' | 'staff';
+export type UserRole = 'admin' | 'staff' | 'staff@sg_sec';
 
 export type Letter = {
   id: string;

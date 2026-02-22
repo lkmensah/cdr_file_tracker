@@ -2,7 +2,7 @@
 'use client';
 
 import type { CorrespondenceFile, Letter, Movement, Attorney, CaseReminder, FileRequest, Reminder } from '@/lib/types';
-import { Folder, Mail, Scale, Truck, CheckCircle2, Loader2, UserCheck, Users, Calendar, MessageCircle, MessageSquare, FileText, AlertCircle, HandIcon, Clock, Bell, History, Zap, AlarmClock, Send } from 'lucide-react';
+import { Folder, Mail, Scale, Truck, CheckCircle2, Loader2, UserCheck, Users, Calendar, MessageCircle, MessageSquare, FileText, AlertCircle, HandIcon, Clock, Bell, History, Zap, AlarmClock, Send, ShieldCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DashboardChart } from './dashboard-chart';
 import { WorkloadAnalytics } from './workload-analytics';
@@ -67,7 +67,7 @@ export function Dashboard({
   generalReminders?: Reminder[];
 }) {
   const firestore = useFirestore();
-  const { isAdmin, profile } = useProfile();
+  const { isAdmin, profile, isSGSec } = useProfile();
   const [isInTransitOpen, setIsInTransitOpen] = React.useState(false);
   const [selectedFileId, setSelectedFileId] = React.useState<string | null>(null);
   const [currentTime, setCurrentTime] = React.useState(new Date());
@@ -82,6 +82,11 @@ export function Dashboard({
   const attorneysQuery = useMemoFirebase(() => firestore ? collection(firestore, 'attorneys') : null, [firestore]);
   const { data: attorneys } = useCollection<Attorney>(attorneysQuery);
 
+  // Identify the Solicitor General's name for filtering
+  const sgName = React.useMemo(() => {
+    return attorneys?.find(a => a.isSG)?.fullName;
+  }, [attorneys]);
+
   const inTransitFiles = React.useMemo(() => {
     return initialFiles.flatMap(file => {
         const movements = Array.isArray(file.movements) ? file.movements : [];
@@ -94,11 +99,15 @@ export function Dashboard({
         });
         const latest = sorted[0];
         if (latest && !latest.receivedAt && latest.movedTo?.toLowerCase() !== 'registry') {
+            // Filter: SG Secretariat staff only see files going to SG
+            if (isSGSec && sgName && latest.movedTo?.toLowerCase() !== sgName.toLowerCase()) {
+                return [];
+            }
             return [{ ...file, latestMovement: latest }];
         }
         return [];
     });
-  }, [initialFiles]);
+  }, [initialFiles, isSGSec, sgName]);
 
   const pendingRequests = React.useMemo(() => {
     return initialFiles.flatMap(file => 
@@ -199,6 +208,17 @@ export function Dashboard({
     }
   };
 
+  const handleSecretariatConfirm = async (file: typeof inTransitFiles[0]) => {
+    if (!profile) return;
+    const formData = new FormData();
+    formData.append('fileNumber', file.fileNumber);
+    formData.append('movementId', file.latestMovement.id);
+    const result = await authConfirmReceipt(formData);
+    if (result && result.message.includes('Success')) {
+        toast({ title: "Secretariat Receipt Confirmed", description: "The folder is now marked as delivered to the SG's office. Her portal is now unlocked." });
+    }
+  };
+
   const handleSendReminder = async (reminder: any) => {
     if (!reminder.assignedTo) {
         toast({ variant: 'destructive', title: "No Assigned Attorney", description: "This file has no attorney assigned to notify." });
@@ -265,13 +285,27 @@ export function Dashboard({
         {/* Statistics Grid */}
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard title="Total Files" value={initialFiles.length} icon={Folder} />
-            <StatCard title="Files in Transit" value={inTransitFiles.length} icon={Truck} colorClass={inTransitFiles.length > 0 ? "text-yellow-500" : ""} onClick={() => setIsInTransitOpen(true)} />
+            <StatCard title={isSGSec ? "Arrivals for SG" : "Files in Transit"} value={inTransitFiles.length} icon={Truck} colorClass={inTransitFiles.length > 0 ? "text-yellow-500" : ""} onClick={() => setIsInTransitOpen(true)} />
             <StatCard title="Total Incoming Mail" value={initialIncomingMail.length} icon={Mail} />
             <StatCard title="Total Court Processes" value={initialCourtProcesses.length} icon={Scale} />
         </div>
 
+        {isSGSec && (
+            <div className="bg-primary/5 border border-primary/20 rounded-xl p-6 shadow-sm">
+                <div className="flex items-center gap-4">
+                    <div className="bg-primary/10 p-3 rounded-full">
+                        <ShieldCheck className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-primary">SG Secretariat Access</h3>
+                        <p className="text-sm text-muted-foreground">You are logged in as SG Secretariat. Use the "Arrivals for SG" card above to confirm physical folders as they reach the office.</p>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* Action Center: Triggered Reminders (Next 60 Minutes) */}
-        {triggeredReminders.length > 0 && (
+        {!isSGSec && triggeredReminders.length > 0 && (
             <div className="animate-in fade-in slide-in-from-top-4 duration-500">
                 <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4 sm:p-6 shadow-md relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-2 opacity-10">
@@ -342,7 +376,7 @@ export function Dashboard({
                                     <TableHead className="w-[120px]">Requested By</TableHead>
                                     <TableHead>File Info</TableHead>
                                     <TableHead className="w-[80px]">Awaiting</TableHead>
-                                    <TableHead className="text-right w-[80px]">Action</TableHead>
+                                    {!isSGSec && <TableHead className="text-right w-[80px]">Action</TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -366,20 +400,22 @@ export function Dashboard({
                                                 {formatDistanceToNow(toDate(req.requestedAt)!)}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-right">
-                                            <Button 
-                                                variant="ghost" 
-                                                size="sm" 
-                                                className="text-destructive hover:bg-destructive/10 h-8"
-                                                onClick={() => authCancelRequest(req.fileNumber, req.id)}
-                                            >
-                                                Clear
-                                            </Button>
-                                        </TableCell>
+                                        {!isSGSec && (
+                                            <TableCell className="text-right">
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="sm" 
+                                                    className="text-destructive hover:bg-destructive/10 h-8"
+                                                    onClick={() => authCancelRequest(req.fileNumber, req.id)}
+                                                >
+                                                    Clear
+                                                </Button>
+                                            </TableCell>
+                                        )}
                                     </TableRow>
                                 )) : (
                                     <TableRow>
-                                        <TableCell colSpan={4} className="h-32 text-center text-muted-foreground italic">
+                                        <TableCell colSpan={isSGSec ? 3 : 4} className="h-32 text-center text-muted-foreground italic">
                                             No pending file requests.
                                         </TableCell>
                                     </TableRow>
@@ -392,95 +428,102 @@ export function Dashboard({
         </div>
 
         {/* System-wide Deadline Monitoring */}
-        <div className="grid gap-8 min-w-0">
-            <Card className="shadow-sm border-primary/10 overflow-hidden">
-                <CardHeader className="pb-3 border-b">
-                    <div className="flex items-center gap-2">
-                        <Calendar className="h-5 w-5 text-primary" />
-                        <div>
-                            <CardTitle>Upcoming System-wide Deadlines</CardTitle>
-                            <CardDescription>Aggregated reminders for both case files and general activities.</CardDescription>
+        {!isSGSec && (
+            <div className="grid gap-8 min-w-0">
+                <Card className="shadow-sm border-primary/10 overflow-hidden">
+                    <CardHeader className="pb-3 border-b">
+                        <div className="flex items-center gap-2">
+                            <Calendar className="h-5 w-5 text-primary" />
+                            <div>
+                                <CardTitle>Upcoming System-wide Deadlines</CardTitle>
+                                <CardDescription>Aggregated reminders for both case files and general activities.</CardDescription>
+                            </div>
                         </div>
-                    </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                    <div className="w-full overflow-x-auto">
-                        <Table className="min-w-[800px] lg:min-w-full">
-                            <TableHeader>
-                                <TableRow className="bg-muted/30">
-                                    <TableHead className="w-[150px]">Due Date/Time</TableHead>
-                                    <TableHead className="w-[150px]">Attorney</TableHead>
-                                    <TableHead>File / Task</TableHead>
-                                    <TableHead className="text-right w-[100px]">Notify</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {allUpcomingReminders.length > 0 ? allUpcomingReminders.map(reminder => {
-                                    const d = toDate(reminder.date)!;
-                                    const isOverdue = isPast(d) && !isToday(d);
-                                    
-                                    // Identify items due in the next hour
-                                    const isDueSoon = d > currentTime && d <= addHours(currentTime, 1);
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        <div className="w-full overflow-x-auto">
+                            <Table className="min-w-[800px] lg:min-w-full">
+                                <TableHeader>
+                                    <TableRow className="bg-muted/30">
+                                        <TableHead className="w-[150px]">Due Date/Time</TableHead>
+                                        <TableHead className="w-[150px]">Attorney</TableHead>
+                                        <TableHead>File / Task</TableHead>
+                                        <TableHead className="text-right w-[100px]">Notify</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {allUpcomingReminders.length > 0 ? allUpcomingReminders.map(reminder => {
+                                        const d = toDate(reminder.date)!;
+                                        const isOverdue = isPast(d) && !isToday(d);
+                                        
+                                        // Identify items due in the next hour
+                                        const isDueSoon = d > currentTime && d <= addHours(currentTime, 1);
 
-                                    return (
-                                        <TableRow key={reminder.id} className={cn(isDueSoon && "bg-amber-50/50 border-l-4 border-l-amber-500 transition-all")}>
-                                            <TableCell>
-                                                <div className="flex flex-col">
-                                                    <span className={cn("font-bold text-xs", isOverdue ? "text-destructive" : isDueSoon ? "text-amber-600" : "text-primary")}>
-                                                        {format(d, 'MMM d, p')}
-                                                    </span>
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="text-[10px] text-muted-foreground uppercase">{isToday(d) ? 'Today' : isOverdue ? 'Overdue' : format(d, 'EEEE')}</span>
-                                                        {isDueSoon && <Badge variant="destructive" className="bg-amber-600 h-3 text-[7px] px-1 animate-pulse border-none">Urgent</Badge>}
+                                        return (
+                                            <TableRow key={reminder.id} className={cn(isDueSoon && "bg-amber-50/50 border-l-4 border-l-amber-500 transition-all")}>
+                                                <TableCell>
+                                                    <div className="flex flex-col">
+                                                        <span className={cn("font-bold text-xs", isOverdue ? "text-destructive" : isDueSoon ? "text-amber-600" : "text-primary")}>
+                                                            {format(d, 'MMM d, p')}
+                                                        </span>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-[10px] text-muted-foreground uppercase">{isToday(d) ? 'Today' : isOverdue ? 'Overdue' : format(d, 'EEEE')}</span>
+                                                            {isDueSoon && <Badge variant="destructive" className="bg-amber-600 h-3 text-[7px] px-1 animate-pulse border-none">Urgent</Badge>}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <p className="text-sm font-medium truncate max-w-[140px]" title={reminder.assignedTo || 'Unassigned'}>
-                                                    {reminder.assignedTo || 'Unassigned'}
-                                                </p>
-                                            </TableCell>
-                                            <TableCell className="max-w-0">
-                                                <div className="flex flex-col gap-0.5 min-w-0">
-                                                    <span className={cn("text-[10px] font-mono font-bold uppercase truncate", reminder.fileNumber === 'General' ? "text-purple-600" : "text-muted-foreground")}>
-                                                        {reminder.fileNumber}
-                                                    </span>
-                                                    <p className="text-xs truncate font-semibold" title={reminder.text}>{reminder.text}</p>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <Button 
-                                                    size="sm" 
-                                                    variant={isDueSoon ? "default" : "outline"}
-                                                    className={cn("h-8 gap-2", isDueSoon ? "bg-amber-600 hover:bg-amber-700" : "border-green-200 hover:bg-green-50 hover:text-green-700 hover:border-green-300")}
-                                                    onClick={() => handleSendReminder(reminder)}
-                                                >
-                                                    <MessageCircle className="h-3.5 w-3.5" />
-                                                    <span className="hidden sm:inline">{isDueSoon ? 'Notify Now' : 'WhatsApp'}</span>
-                                                </Button>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <p className="text-sm font-medium truncate max-w-[140px]" title={reminder.assignedTo || 'Unassigned'}>
+                                                        {reminder.assignedTo || 'Unassigned'}
+                                                    </p>
+                                                </TableCell>
+                                                <TableCell className="max-w-0">
+                                                    <div className="flex flex-col gap-0.5 min-w-0">
+                                                        <span className={cn("text-[10px] font-mono font-bold uppercase truncate", reminder.fileNumber === 'General' ? "text-purple-600" : "text-muted-foreground")}>
+                                                            {reminder.fileNumber}
+                                                        </span>
+                                                        <p className="text-xs truncate font-semibold" title={reminder.text}>{reminder.text}</p>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant={isDueSoon ? "default" : "outline"}
+                                                        className={cn("h-8 gap-2", isDueSoon ? "bg-amber-600 hover:bg-amber-700" : "border-green-200 hover:bg-green-50 hover:text-green-700 hover:border-green-300")}
+                                                        onClick={() => handleSendReminder(reminder)}
+                                                    >
+                                                        <MessageCircle className="h-3.5 w-3.5" />
+                                                        <span className="hidden sm:inline">{isDueSoon ? 'Notify Now' : 'WhatsApp'}</span>
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        )
+                                    }) : (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="h-32 text-center text-muted-foreground italic">
+                                                No active reminders found.
                                             </TableCell>
                                         </TableRow>
-                                    )
-                                }) : (
-                                    <TableRow>
-                                        <TableCell colSpan={4} className="h-32 text-center text-muted-foreground italic">
-                                            No active reminders found.
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        )}
 
         {/* Dialogs */}
         <Dialog open={isInTransitOpen} onOpenChange={setIsInTransitOpen}>
             <DialogContent className="w-[95vw] sm:max-w-4xl max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>Files in Transit</DialogTitle>
-                    <DialogDescription>Awaiting physical receipt confirmation from the assigned practitioners.</DialogDescription>
+                    <DialogTitle>{isSGSec ? "Files Arriving at SG Secretariat" : "Files in Transit"}</DialogTitle>
+                    <DialogDescription>
+                        {isSGSec 
+                            ? "Confirm arrival of physical folders at the Solicitor General's office." 
+                            : "Awaiting physical receipt confirmation from the assigned practitioners."
+                        }
+                    </DialogDescription>
                 </DialogHeader>
                 <div className="py-4 space-y-8 [&_*]:min-w-0">
                     {Object.keys(groupedInTransit).length > 0 ? (
@@ -492,10 +535,12 @@ export function Dashboard({
                                         <h3 className="font-semibold text-lg truncate">{destination}</h3>
                                         <span className="text-sm text-muted-foreground ml-2 shrink-0">({files.length})</span>
                                     </div>
-                                    <Button size="sm" variant="outline" className="h-8 bg-background shrink-0 w-full sm:w-auto gap-2" onClick={() => handleNotifyBatch(destination, files)}>
-                                        <MessageCircle className="h-3.5 w-3.5 text-green-600" />
-                                        Notify via WhatsApp
-                                    </Button>
+                                    {!isSGSec && (
+                                        <Button size="sm" variant="outline" className="h-8 bg-background shrink-0 w-full sm:w-auto gap-2" onClick={() => handleNotifyBatch(destination, files)}>
+                                            <MessageCircle className="h-3.5 w-3.5 text-green-600" />
+                                            Notify via WhatsApp
+                                        </Button>
+                                    )}
                                 </div>
                                 <div className="rounded-md border overflow-hidden">
                                     <div className="w-full overflow-x-auto">
@@ -505,7 +550,7 @@ export function Dashboard({
                                                     <TableHead className="w-[120px]">File No.</TableHead>
                                                     <TableHead>Subject</TableHead>
                                                     <TableHead className="w-[150px]">Date Moved</TableHead>
-                                                    <TableHead className="text-right w-[100px]">Action</TableHead>
+                                                    <TableHead className="text-right w-[150px]">Action</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
@@ -521,10 +566,22 @@ export function Dashboard({
                                                             {moveDate ? format(moveDate, 'MMM d, p') : 'N/A'}
                                                         </TableCell>
                                                         <TableCell className="text-right">
-                                                            <Button size="sm" variant="ghost" className="h-8 hover:bg-green-50 hover:text-green-700 gap-1.5" onClick={() => handleNotifyAttorney(file)}>
-                                                                <Send className="h-3 w-3" />
-                                                                Notify
-                                                            </Button>
+                                                            {isSGSec ? (
+                                                                <Button 
+                                                                    size="sm" 
+                                                                    className="bg-green-600 hover:bg-green-700 h-8 gap-1.5" 
+                                                                    onClick={() => handleSecretariatConfirm(file)}
+                                                                    disabled={isConfirming}
+                                                                >
+                                                                    {isConfirming ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                                                                    Confirm Arrival
+                                                                </Button>
+                                                            ) : (
+                                                                <Button size="sm" variant="ghost" className="h-8 hover:bg-green-50 hover:text-green-700 gap-1.5" onClick={() => handleNotifyAttorney(file)}>
+                                                                    <Send className="h-3 w-3" />
+                                                                    Notify
+                                                                </Button>
+                                                            )}
                                                         </TableCell>
                                                     </TableRow>
                                                 )})}
@@ -537,7 +594,7 @@ export function Dashboard({
                     ) : (
                         <div className="flex flex-col items-center justify-center py-12 text-center">
                             <div className="rounded-full bg-muted p-4 mb-4"><Truck className="h-8 w-8 text-muted-foreground opacity-50" /></div>
-                            <h3 className="text-lg font-medium">No Files in Transit</h3>
+                            <h3 className="text-lg font-medium">{isSGSec ? "No Files Awaiting SG Arrival" : "No Files in Transit"}</h3>
                         </div>
                     )}
                 </div>

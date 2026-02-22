@@ -26,9 +26,10 @@ import type { UserProfile } from '@/lib/types';
 interface AuthContextType {
     profile: UserProfile | null;
     isAdmin: boolean;
+    isSGSec: boolean;
 }
 
-const AuthContext = createContext<AuthContextType>({ profile: null, isAdmin: false });
+const AuthContext = createContext<AuthContextType>({ profile: null, isAdmin: false, isSGSec: false });
 
 export const useProfile = () => useContext(AuthContext);
 
@@ -93,6 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, isUserLoading, router, pathname, firestore, isPortalRoute, isAuthRoute]);
 
   const isAdmin = profile?.role === 'admin';
+  const isSGSec = profile?.role === 'staff@sg_sec';
   const isAdminOnlyRoute = pathname === '/report' || pathname === '/audit-log';
 
   // Protect admin-only pages from standard staff users
@@ -101,6 +103,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         router.push('/');
     }
   }, [isLoadingProfile, isAdminOnlyRoute, isAdmin, router, isPortalRoute]);
+
+  // SG Secretariat restricted navigation
+  useEffect(() => {
+    if (!isLoadingProfile && isSGSec && !isPortalRoute) {
+        const allowedPaths = ['/', '/files', '/profile', '/search', '/change-password'];
+        if (!allowedPaths.includes(pathname)) {
+            router.push('/');
+        }
+    }
+  }, [isLoadingProfile, isSGSec, pathname, router, isPortalRoute]);
 
   if (isUserLoading || (isLoadingProfile && !isBypassRoute)) {
     return <div className="flex h-screen items-center justify-center"><div>Loading session...</div></div>;
@@ -112,7 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   if (!user || user.isAnonymous) return <div className="flex h-screen items-center justify-center"><div>Redirecting to login...</div></div>;
 
   return (
-    <AuthContext.Provider value={{ profile, isAdmin }}>
+    <AuthContext.Provider value={{ profile, isAdmin, isSGSec }}>
      <SidebarProvider>
             <Sidebar collapsible="icon">
                 <SidebarContent>
@@ -138,46 +150,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         </SidebarMenu>
                     </SidebarGroup>
 
-                    <SidebarGroup>
-                        <SidebarGroupLabel>Correspondence</SidebarGroupLabel>
-                        <SidebarMenu>
-                            <SidebarMenuItem>
-                                <SidebarMenuButton asChild isActive={pathname === '/incoming-mail'}>
-                                    <Link href="/incoming-mail"><Mail /><span>Incoming Mail</span></Link>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                            <SidebarMenuItem>
-                                <SidebarMenuButton asChild isActive={pathname === '/court-processes'}>
-                                    <Link href="/court-processes"><Scale /><span>Court Processes</span></Link>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                        </SidebarMenu>
-                    </SidebarGroup>
+                    {!isSGSec && (
+                        <>
+                            <SidebarGroup>
+                                <SidebarGroupLabel>Correspondence</SidebarGroupLabel>
+                                <SidebarMenu>
+                                    <SidebarMenuItem>
+                                        <SidebarMenuButton asChild isActive={pathname === '/incoming-mail'}>
+                                            <Link href="/incoming-mail"><Mail /><span>Incoming Mail</span></Link>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                    <SidebarMenuItem>
+                                        <SidebarMenuButton asChild isActive={pathname === '/court-processes'}>
+                                            <Link href="/court-processes"><Scale /><span>Court Processes</span></Link>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                </SidebarMenu>
+                            </SidebarGroup>
 
-                    <SidebarGroup>
-                        <SidebarGroupLabel>Registry</SidebarGroupLabel>
-                        <SidebarMenu>
-                            <SidebarMenuItem>
-                                <SidebarMenuButton asChild isActive={pathname === '/archives'}>
-                                    <Link href="/archives"><Archive /><span>Archives</span></Link>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                            <SidebarMenuItem>
-                                <SidebarMenuButton asChild isActive={pathname === '/census'}>
-                                    <Link href="/census"><ClipboardList /><span>Census</span></Link>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                        </SidebarMenu>
-                    </SidebarGroup>
+                            <SidebarGroup>
+                                <SidebarGroupLabel>Registry</SidebarGroupLabel>
+                                <SidebarMenu>
+                                    <SidebarMenuItem>
+                                        <SidebarMenuButton asChild isActive={pathname === '/archives'}>
+                                            <Link href="/archives"><Archive /><span>Archives</span></Link>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                    <SidebarMenuItem>
+                                        <SidebarMenuButton asChild isActive={pathname === '/census'}>
+                                            <Link href="/census"><ClipboardList /><span>Census</span></Link>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                </SidebarMenu>
+                            </SidebarGroup>
+                        </>
+                    )}
 
                     <SidebarGroup>
                         <SidebarGroupLabel>Administration</SidebarGroupLabel>
                         <SidebarMenu>
-                            <SidebarMenuItem>
-                                <SidebarMenuButton asChild isActive={pathname === '/attorneys'}>
-                                    <Link href="/attorneys"><Users /><span>Attorneys</span></Link>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
+                            {!isSGSec && (
+                                <SidebarMenuItem>
+                                    <SidebarMenuButton asChild isActive={pathname === '/attorneys'}>
+                                        <Link href="/attorneys"><Users /><span>Attorneys</span></Link>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            )}
                             <SidebarMenuItem>
                                 <SidebarMenuButton asChild isActive={pathname === '/profile'}>
                                     <Link href="/profile"><UserCircle /><span>My Profile</span></Link>

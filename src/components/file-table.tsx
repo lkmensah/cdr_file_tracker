@@ -56,7 +56,7 @@ const toDate = (value: any): Date | null => {
 
 export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], onEditFile: (file: CorrespondenceFile) => void; }) {
   const firestore = useFirestore();
-  const { isAdmin, profile } = useProfile();
+  const { isAdmin, profile, isSGSec } = useProfile();
   const { toast } = useToast();
   
   const [selectedFileIds, setSelectedFileIds] = React.useState<Set<string>>(new Set());
@@ -187,7 +187,7 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
   return (
     <>
       <div className="space-y-4">
-        {selectedFileIds.size > 0 && (
+        {selectedFileIds.size > 0 && !isSGSec && (
             <div className="flex flex-col sm:flex-row items-center justify-between bg-primary/10 border border-primary/20 p-3 rounded-lg animate-in fade-in slide-in-from-top-2 gap-3">
                 <div className="flex items-center gap-2">
                     <Files className="h-4 w-4 text-primary" />
@@ -255,7 +255,7 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
                         <Checkbox 
                             checked={isSelected}
                             onCheckedChange={() => toggleSelectFile(file.id)}
-                            disabled={isCompleted}
+                            disabled={isCompleted || isSGSec}
                         />
                     </TableCell>
                     <TableCell className="px-2">
@@ -331,50 +331,54 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-56">
-                            <DropdownMenuItem 
-                                onClick={() => handleOpenNewCorrespondence(file)}
-                                disabled={isCompleted}
-                            >
-                            <FilePlus2 className="mr-2 h-4 w-4" />
-                            Add Correspondence
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                                onClick={() => handleOpenMoveFile(file)}
-                                disabled={isCompleted}
-                            >
-                                <Send className="mr-2 h-4 w-4" />
-                                Move File
-                            </DropdownMenuItem>
-                            {latestMovement && !latestMovement.receivedAt && !isRegistry && (
-                                <DropdownMenuItem 
-                                    onClick={() => handleNotifyWhatsApp(file)} 
-                                    disabled={isCompleted}
-                                >
-                                    <MessageCircle className="mr-2 h-4 w-4 text-green-600" />
-                                    Notify via WhatsApp
-                                </DropdownMenuItem>
+                            {!isSGSec && (
+                                <>
+                                    <DropdownMenuItem 
+                                        onClick={() => handleOpenNewCorrespondence(file)}
+                                        disabled={isCompleted}
+                                    >
+                                    <FilePlus2 className="mr-2 h-4 w-4" />
+                                    Add Correspondence
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem 
+                                        onClick={() => handleOpenMoveFile(file)}
+                                        disabled={isCompleted}
+                                    >
+                                        <Send className="mr-2 h-4 w-4" />
+                                        Move File
+                                    </DropdownMenuItem>
+                                    {latestMovement && !latestMovement.receivedAt && !isRegistry && (
+                                        <DropdownMenuItem 
+                                            onClick={() => handleNotifyWhatsApp(file)} 
+                                            disabled={isCompleted}
+                                        >
+                                            <MessageCircle className="mr-2 h-4 w-4 text-green-600" />
+                                            Notify via WhatsApp
+                                        </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuItem 
+                                        onClick={() => onEditFile(file)}
+                                        disabled={isCompleted}
+                                    >
+                                        <Pencil className="mr-2 h-4 w-4" />
+                                        Edit File
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => handleToggleStatus(file)} disabled={isTogglingStatus}>
+                                        {isCompleted ? (
+                                            <>
+                                                <FolderOpen className="mr-2 h-4 w-4 text-blue-500" />
+                                                Reopen Case
+                                            </>
+                                        ) : (
+                                            <>
+                                                <FolderCheck className="mr-2 h-4 w-4 text-green-600" />
+                                                Mark as Completed
+                                            </>
+                                        )}
+                                    </DropdownMenuItem>
+                                </>
                             )}
-                            <DropdownMenuItem 
-                                onClick={() => onEditFile(file)}
-                                disabled={isCompleted}
-                            >
-                                <Pencil className="mr-2 h-4 w-4" />
-                                Edit File
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleToggleStatus(file)} disabled={isTogglingStatus}>
-                                {isCompleted ? (
-                                    <>
-                                        <FolderOpen className="mr-2 h-4 w-4 text-blue-500" />
-                                        Reopen Case
-                                    </>
-                                ) : (
-                                    <>
-                                        <FolderCheck className="mr-2 h-4 w-4 text-green-600" />
-                                        Mark as Completed
-                                    </>
-                                )}
-                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleViewDetails(file)}>
                             View Details
                             </DropdownMenuItem>
