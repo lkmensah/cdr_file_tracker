@@ -163,7 +163,30 @@ export function Dashboard({
         if (!groups[dest]) groups[dest] = [];
         groups[dest].push(file);
     });
-    return groups;
+
+    // 1. Reorder files within each group: Notify first, Remind second
+    Object.keys(groups).forEach(dest => {
+        groups[dest].sort((a, b) => {
+            const aNotified = !!a.latestMovement.notifiedByPhone;
+            const bNotified = !!b.latestMovement.notifiedByPhone;
+            if (aNotified === bNotified) return 0;
+            return aNotified ? 1 : -1; // Notify (false) comes before Remind (true)
+        });
+    });
+
+    // 2. Sort the destination groups so groups with "Notify" items appear before "Remind-only" groups
+    const sortedEntries = Object.entries(groups).sort(([destA, filesA], [destB, filesB]) => {
+        const aHasNotify = filesA.some(f => !f.latestMovement.notifiedByPhone);
+        const bHasNotify = filesB.some(f => !f.latestMovement.notifiedByPhone);
+        
+        if (aHasNotify && !bHasNotify) return -1;
+        if (!aHasNotify && bHasNotify) return 1;
+        
+        // Secondary sort by destination name
+        return destA.localeCompare(destB);
+    });
+
+    return Object.fromEntries(sortedEntries);
   }, [inTransitFiles]);
 
   const { exec: authConfirmReceipt, isLoading: isConfirming } = useAuthAction(confirmFileReceipt);
