@@ -735,6 +735,7 @@ export default function PortalDashboard() {
     const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
 
     const FileCard = ({ file, type }: { file: CorrespondenceFile, type: 'pinned' | 'primary' | 'collaborative' | 'action' | 'oversight' | 'completed' | 'historical' | 'all' | 'arrival' }) => {
+        const [isOpening, setIsOpening] = React.useState(false);
         const movements = [...(file.movements || [])].sort((a,b) => {
             const dateA = toDate(a.date)?.getTime() || 0;
             const dateB = toDate(b.date)?.getTime() || 0;
@@ -757,7 +758,11 @@ export default function PortalDashboard() {
 
         return (
             <div className="relative group h-full">
-                <Link href={`/portal/file/${file.id}`} className="block h-full group relative">
+                <Link 
+                    href={`/portal/file/${file.id}`} 
+                    className="block h-full group relative"
+                    onClick={() => setIsOpening(true)}
+                >
                     <Card className={cn("h-full hover:border-primary transition-all duration-300 shadow-sm border-l-4 overflow-hidden flex flex-col group-hover:shadow-md", 
                         isArrival ? (isSelected ? "border-l-primary bg-primary/5 ring-2 ring-primary/20" : "border-l-amber-500 bg-amber-50/10") :
                         isCompleted ? "border-l-green-500 bg-green-50/5 opacity-90" : 
@@ -862,6 +867,14 @@ export default function PortalDashboard() {
                         <Button variant="ghost" size="icon" className={cn("absolute top-3 right-3 h-7 w-7 transition-all rounded-full bg-background/80 backdrop-blur-sm shadow-sm border", file.pinnedBy?.[attorney.id] ? "opacity-100 text-yellow-500 scale-110" : "opacity-0 group-hover:opacity-100 scale-100")} onClick={(e) => handleTogglePin(e, file.id)}>
                             <Star className={cn("h-3.5 w-3.5", file.pinnedBy?.[attorney.id] && "fill-current")} />
                         </Button>
+                    )}
+                    {isOpening && (
+                        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-background/60 backdrop-blur-[1px] animate-in fade-in duration-300 rounded-lg border-2 border-primary/20">
+                            <div className="bg-white p-4 rounded-2xl shadow-xl border flex flex-col items-center gap-3">
+                                <Loader2 className="h-8 w-8 text-primary animate-spin" />
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Opening Workspace</span>
+                            </div>
+                        </div>
                     )}
                 </Link>
                 {isArrival && (
