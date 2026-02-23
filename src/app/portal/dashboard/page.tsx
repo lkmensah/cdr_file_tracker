@@ -1201,7 +1201,38 @@ export default function PortalDashboard() {
 
                         <div className="space-y-12 min-w-0">
                             {isSG ? (
-                                <section className="space-y-6 min-w-0"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4"><h3 className="text-sm font-black flex items-center gap-3 text-yellow-600 uppercase tracking-[0.2em]"><LayoutDashboard className="h-5 w-5" /> Master File List</h3><Badge variant="outline" className={cn("text-[10px] h-6 px-3 border-yellow-500 text-yellow-700 bg-yellow-50 uppercase font-black tracking-widest rounded-full shadow-sm", isActingSG && "border-amber-500 text-amber-700 bg-amber-50")}>{isActingSG ? 'Acting SG Oversight Active' : "Solicitor General's View"}</Badge></div><div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-w-0">{paginatedAllFiles.map(file => <FileCard key={file.id} file={file} type="all" />)}</div>{totalPages > 1 && (<div className="flex flex-col sm:flex-row items-center justify-between border-t pt-8 gap-6"><p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">Showing <span className="font-black text-foreground">{(currentPage - 1) * PAGE_SIZE + 1}</span> to <span className="font-black text-foreground">{Math.min(currentPage * PAGE_SIZE, caseloads.all.length)}</span> of <span className="font-black text-foreground">{caseloads.all.length}</span> records</p><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-10 px-4 rounded-xl font-bold uppercase text-[10px] tracking-widest"><ChevronLeft className="h-4 w-4 mr-2" />Prev</Button><div className="text-[10px] font-black px-4 py-2 bg-muted rounded-xl border tracking-widest">Page {currentPage} of {totalPages}</div><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="h-10 px-4 rounded-xl font-bold uppercase text-[10px] tracking-widest">Next<ChevronRightIcon className="h-4 w-4 ml-2" /></Button></div></div>)}</section>
+                                <section className="space-y-6 min-w-0">
+                                    {/* Personal Caseload for SG/Acting SG */}
+                                    {(caseloads.primary.length > 0 || caseloads.collaborative.length > 0 || caseloads.pinned.length > 0) && !searchTerm && (
+                                        <div className="bg-primary/5 border border-primary/10 rounded-2xl p-6 mb-10 space-y-8">
+                                            <div className="flex items-center gap-3 pb-4 border-b border-primary/10">
+                                                <Briefcase className="h-5 w-5 text-primary" />
+                                                <h3 className="text-sm font-black text-primary uppercase tracking-[0.2em]">Personal Active Caseload</h3>
+                                            </div>
+                                            {caseloads.pinned.length > 0 && <section className="space-y-4"><h4 className="text-[10px] font-black text-yellow-600 uppercase tracking-widest flex items-center gap-2"><Star className="h-3.5 w-3.5 fill-current" /> High Priority</h4><div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">{caseloads.pinned.map(file => <FileCard key={file.id} file={file} type="pinned" />)}</div></section>}
+                                            {caseloads.primary.length > 0 && <section className="space-y-4"><h4 className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-2"><Briefcase className="h-3.5 w-3.5" /> Lead Practitioner</h4><div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">{caseloads.primary.map(file => <FileCard key={file.id} file={file} type="primary" />)}</div></section>}
+                                            {caseloads.collaborative.length > 0 && <section className="space-y-4"><h4 className="text-[10px] font-black text-teal-600 uppercase tracking-widest flex items-center gap-2"><Users className="h-3.5 w-3.5" /> Team Assignments</h4><div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">{caseloads.collaborative.map(file => <FileCard key={file.id} file={file} type="collaborative" />)}</div></section>}
+                                        </div>
+                                    )}
+
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+                                        <h3 className="text-sm font-black flex items-center gap-3 text-yellow-600 uppercase tracking-[0.2em]"><LayoutDashboard className="h-5 w-5" /> Master File List</h3>
+                                        <Badge variant="outline" className={cn("text-[10px] h-6 px-3 border-yellow-500 text-yellow-700 bg-yellow-50 uppercase font-black tracking-widest rounded-full shadow-sm", isActingSG && "border-amber-500 text-amber-700 bg-amber-50")}>{isActingSG ? 'Acting SG Oversight Active' : "Solicitor General's View"}</Badge>
+                                    </div>
+                                    <div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-w-0">
+                                        {paginatedAllFiles.map(file => <FileCard key={file.id} file={file} type="all" />)}
+                                    </div>
+                                    {totalPages > 1 && (
+                                        <div className="flex flex-col sm:flex-row items-center justify-between border-t pt-8 gap-6">
+                                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">Showing <span className="font-black text-foreground">{(currentPage - 1) * PAGE_SIZE + 1}</span> to <span className="font-black text-foreground">{Math.min(currentPage * PAGE_SIZE, caseloads.all.length)}</span> of <span className="font-black text-foreground">{caseloads.all.length}</span> records</p>
+                                            <div className="flex items-center gap-3">
+                                                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-10 px-4 rounded-xl font-bold uppercase text-[10px] tracking-widest"><ChevronLeft className="h-4 w-4 mr-2" />Prev</Button>
+                                                <div className="text-[10px] font-black px-4 py-2 bg-muted rounded-xl border tracking-widest">Page {currentPage} of {totalPages}</div>
+                                                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="h-10 px-4 rounded-xl font-bold uppercase text-[10px] tracking-widest">Next<ChevronRightIcon className="h-4 w-4 ml-2" /></Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </section>
                             ) : (
                                 <div className="space-y-12 min-w-0">
                                     {caseloads.pinned.length > 0 && <section className="space-y-6"><h3 className="text-xs font-black flex items-center gap-3 text-yellow-600 uppercase tracking-[0.2em] bg-yellow-50 w-fit px-4 py-2 rounded-lg border border-yellow-100"><Star className="h-5 w-5 fill-current" /> High Priority Cluster</h3><div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">{caseloads.pinned.map(file => <FileCard key={file.id} file={file} type="pinned" />)}</div></section>}
