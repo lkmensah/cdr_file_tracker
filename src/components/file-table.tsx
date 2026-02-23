@@ -166,7 +166,6 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
         let notificationPhone = targetAttorney?.phoneNumber;
         let recipientLabel = targetAttorney?.fullName || destination;
 
-        // Routing for SG Secretariat
         if (targetAttorney?.isSG) {
             const firstSec = secretariatUsers?.find(u => !!u.phoneNumber);
             if (firstSec) {
@@ -203,6 +202,8 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
       </div>
     );
   }
+
+  const staticOffices = ['registry', 'dpp', 'cd', 'hr'];
 
   return (
     <>
@@ -259,7 +260,7 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
                 })[0];
 
                 const dateCreated = toDate(file.dateCreated);
-                const isRegistry = latestMovement?.movedTo?.toLowerCase() === 'registry';
+                const isOffice = staticOffices.includes(latestMovement?.movedTo?.toLowerCase() ?? 'registry');
                 const isCompleted = file.status === 'Completed';
 
                 const activityTime = toDate(file.lastActivityAt);
@@ -329,7 +330,7 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
                                             </span>
                                         </div>
                                     ) : (
-                                        !isRegistry && (
+                                        !isOffice && (
                                             <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-700 border-yellow-500/20 px-1.5 py-0 text-[10px] w-fit gap-1 font-medium italic shrink-0">
                                                 <Truck className="h-2.5 w-2.5" /> In Transit
                                             </Badge>
@@ -367,7 +368,7 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
                                         <Send className="mr-2 h-4 w-4" />
                                         Move File
                                     </DropdownMenuItem>
-                                    {latestMovement && !latestMovement.receivedAt && !isRegistry && (
+                                    {latestMovement && !latestMovement.receivedAt && !isOffice && (
                                         <DropdownMenuItem 
                                             onClick={() => handleNotifyWhatsApp(file)} 
                                             disabled={isCompleted}

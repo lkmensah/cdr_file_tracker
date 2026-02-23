@@ -105,7 +105,7 @@ const LetterDetailsInner = ({ letter, index, total, fileNumber, onDataChange }: 
 
     const { exec: authDelete, isLoading: isDeleting } = useAuthAction(deleteLetterFromFile, {
         onSuccess: () => {
-            toast({ title: 'Letter Deleted' });
+            toast({ title: 'Folio Deleted' });
             onDataChange();
             setIsDeleteAlertOpen(false);
         }
@@ -206,7 +206,10 @@ const MovementEditFormInner = ({ movement, fileNumber, attorneys, onCancel, onSu
 
     const attorneyOptions = React.useMemo(() => {
         const list = (attorneys || []).map(a => ({ label: a.fullName, value: a.fullName }));
-        if (!list.some(o => o.value === 'Registry')) list.unshift({ label: 'Registry', value: 'Registry' });
+        const offices = ['Registry', 'DPP', 'CD', 'HR'];
+        offices.forEach(off => {
+            if (!list.some(o => o.value === off)) list.unshift({ label: off, value: off });
+        });
         return list;
     }, [attorneys]);
 
@@ -303,7 +306,6 @@ const MovementDetailsInner = ({ movement, index, total, fileNumber, fileSubject,
         let notificationPhone = target?.phoneNumber;
         let recipientLabel = target?.fullName || dest;
 
-        // Route to SG Secretariat if destination is SG
         if (target?.isSG) {
             const firstSec = secretariatUsers?.find(u => !!u.phoneNumber);
             if (firstSec) {
@@ -330,11 +332,13 @@ const MovementDetailsInner = ({ movement, index, total, fileNumber, fileSubject,
 
     const handleConfirm = async () => { const fd = new FormData(); fd.append('fileNumber', fileNumber); fd.append('movementId', movement.id); await authConfirm(fd); };
     const handleDelete = async () => { await authDelete(fileNumber, movement.id); };
-    const isRegistry = movement.movedTo?.toLowerCase() === 'registry';
+    
+    const staticOffices = ['registry', 'dpp', 'cd', 'hr'];
+    const isStaticOffice = staticOffices.includes(movement.movedTo?.toLowerCase());
 
     return (
         <div className="space-y-4">
-            <div className="flex justify-between items-start"><h4 className="text-md font-semibold">Movement #{total - index}</h4><div className="flex items-center gap-2"><div className="flex gap-1"><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => setIsEditMode(true)}><Pencil className="h-4 w-4" /></Button>{isAdmin && (<Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => setIsDeleteAlertOpen(true)}><Trash2 className="h-4 w-4" /></Button>)}</div>{movement.receivedAt ? (<Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1.5 py-1"><CheckCircle2 className="h-3.5 w-3.5" /> Received</Badge>) : (!isRegistry ? (<Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 gap-1.5 py-1"><Truck className="h-3.5 w-3.5" /> In Transit</Badge>) : null)}{isLatest && !movement.receivedAt && (isRegistry ? (<Button size="sm" variant="outline" onClick={handleConfirm} disabled={isConfirming}>{isConfirming ? 'Confirming...' : 'Confirm Receipt'}</Button>) : (<Button size="sm" variant="outline" className="border-green-200 text-green-700 hover:bg-green-50 h-8 gap-2" onClick={handleNotify} disabled={isNotifying}>{isNotifying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageCircle className="h-3.5 w-3.5" />}{movement.notifiedByPhone ? 'Remind' : 'Notify'}</Button>))}</div></div>
+            <div className="flex justify-between items-start"><h4 className="text-md font-semibold">Movement #{total - index}</h4><div className="flex items-center gap-2"><div className="flex gap-1"><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => setIsEditMode(true)}><Pencil className="h-4 w-4" /></Button>{isAdmin && (<Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => setIsDeleteAlertOpen(true)}><Trash2 className="h-4 w-4" /></Button>)}</div>{movement.receivedAt ? (<Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1.5 py-1"><CheckCircle2 className="h-3.5 w-3.5" /> Received</Badge>) : (!isStaticOffice ? (<Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 gap-1.5 py-1"><Truck className="h-3.5 w-3.5" /> In Transit</Badge>) : null)}{isLatest && !movement.receivedAt && (isStaticOffice ? (<Button size="sm" variant="outline" onClick={handleConfirm} disabled={isConfirming}>{isConfirming ? 'Confirming...' : 'Confirm Receipt'}</Button>) : (<Button size="sm" variant="outline" className="border-green-200 text-green-700 hover:bg-green-50 h-8 gap-2" onClick={handleNotify} disabled={isNotifying}>{isNotifying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageCircle className="h-3.5 w-3.5" />}{movement.notifiedByPhone ? 'Remind' : 'Notify'}</Button>))}</div></div>
             {isEditMode && (
                 <div className="bg-muted/30 p-4 rounded-lg border border-primary/20 animate-in fade-in slide-in-from-top-1">
                     <div className="flex justify-between items-center mb-4"><h4 className="font-semibold text-sm">Edit Movement Details</h4><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsEditMode(false)}><Trash2 className="h-4 w-4" /></Button></div>

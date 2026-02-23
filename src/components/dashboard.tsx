@@ -88,6 +88,7 @@ export function Dashboard({
   }, [attorneys]);
 
   const inTransitFiles = React.useMemo(() => {
+    const staticOffices = ['registry', 'dpp', 'cd', 'hr'];
     return initialFiles.flatMap(file => {
         const movements = Array.isArray(file.movements) ? file.movements : [];
         if (movements.length === 0) return [];
@@ -98,7 +99,7 @@ export function Dashboard({
             return b.id.localeCompare(a.id);
         });
         const latest = sorted[0];
-        if (latest && !latest.receivedAt && latest.movedTo?.toLowerCase() !== 'registry') {
+        if (latest && !latest.receivedAt && !staticOffices.includes(latest.movedTo?.toLowerCase())) {
             if (isSGSec && sgName && latest.movedTo?.toLowerCase() !== sgName.toLowerCase()) {
                 return [];
             }
@@ -164,17 +165,15 @@ export function Dashboard({
         groups[dest].push(file);
     });
 
-    // 1. Reorder files within each group: Notify first, Remind second
     Object.keys(groups).forEach(dest => {
         groups[dest].sort((a, b) => {
             const aNotified = !!a.latestMovement.notifiedByPhone;
             const bNotified = !!b.latestMovement.notifiedByPhone;
             if (aNotified === bNotified) return 0;
-            return aNotified ? 1 : -1; // Notify (false) comes before Remind (true)
+            return aNotified ? 1 : -1;
         });
     });
 
-    // 2. Sort the destination groups so groups with "Notify" items appear before "Remind-only" groups
     const sortedEntries = Object.entries(groups).sort(([destA, filesA], [destB, filesB]) => {
         const aHasNotify = filesA.some(f => !f.latestMovement.notifiedByPhone);
         const bHasNotify = filesB.some(f => !f.latestMovement.notifiedByPhone);
@@ -182,7 +181,6 @@ export function Dashboard({
         if (aHasNotify && !bHasNotify) return -1;
         if (!aHasNotify && bHasNotify) return 1;
         
-        // Secondary sort by destination name
         return destA.localeCompare(destB);
     });
 
@@ -216,7 +214,6 @@ export function Dashboard({
     let notificationPhone = targetAttorney?.phoneNumber;
     let recipientLabel = targetAttorney?.fullName || destination;
 
-    // Special Logic for SG Secretariat Routing
     if (targetAttorney?.isSG) {
         const firstSec = secretariatUsers?.find(u => !!u.phoneNumber);
         if (firstSec) {
