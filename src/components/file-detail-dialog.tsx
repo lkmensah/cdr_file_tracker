@@ -206,7 +206,7 @@ const MovementEditFormInner = ({ movement, fileNumber, attorneys, onCancel, onSu
 
     const attorneyOptions = React.useMemo(() => {
         const list = (attorneys || []).map(a => ({ label: a.fullName, value: a.fullName }));
-        const offices = ['Registry', 'DPP', 'CD', 'HR'];
+        const offices = ['Registry', 'AG', 'DAG', 'DPP', 'CD', 'HR'];
         offices.forEach(off => {
             if (!list.some(o => o.value === off)) list.unshift({ label: off, value: off });
         });
@@ -333,7 +333,7 @@ const MovementDetailsInner = ({ movement, index, total, fileNumber, fileSubject,
     const handleConfirm = async () => { const fd = new FormData(); fd.append('fileNumber', fileNumber); fd.append('movementId', movement.id); await authConfirm(fd); };
     const handleDelete = async () => { await authDelete(fileNumber, movement.id); };
     
-    const staticOffices = ['registry', 'dpp', 'cd', 'hr'];
+    const staticOffices = ['registry', 'ag', 'dag', 'dpp', 'cd', 'hr'];
     const isStaticOffice = staticOffices.includes(movement.movedTo?.toLowerCase());
 
     return (
@@ -437,4 +437,12 @@ export function FileDetailDialog({ file: initialFile, isOpen, onOpenChange, onDa
     <AlertDialog open={!!attachmentToDelete} onOpenChange={(open) => !open && setAttachmentToDelete(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Attachment?</AlertDialogTitle><AlertDialogDescription>Are you sure you want to remove <strong>{attachmentToDelete?.name}</strong>? This action will permanently remove the document record from this file.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={isDeletingAttachment}>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteAttachment} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isDeletingAttachment}>{isDeletingAttachment ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}Delete Attachment</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </>
   );
+}
+
+function LetterDetails({ letter, index, total, fileNumber, onDataChange }: { letter: Letter, index: number, total: number, fileNumber: string, onDataChange: () => void }) {
+    return null; // This logic is now handled by LetterDetailsInner
+}
+
+function MovementDetails({ movement, index, total, fileNumber, fileSubject, isLatest, onDataChange }: { movement: Movement, index: number, total: number, fileNumber: string, fileSubject: string, isLatest: boolean, onDataChange: () => void }) {
+    return null; // This logic is now handled by MovementDetailsInner
 }
