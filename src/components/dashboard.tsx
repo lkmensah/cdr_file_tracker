@@ -88,7 +88,7 @@ export function Dashboard({
   }, [attorneys]);
 
   const inTransitFiles = React.useMemo(() => {
-    const staticOffices = ['registry', 'dpp', 'cd', 'hr'];
+    const staticOffices = ['registry', 'ag', 'dag', 'dpp', 'cd', 'hr'];
     return initialFiles.flatMap(file => {
         const movements = Array.isArray(file.movements) ? file.movements : [];
         if (movements.length === 0) return [];
@@ -417,7 +417,12 @@ export function Dashboard({
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {pendingRequests.length > 0 ? pendingRequests.map(req => (
+                                {pendingRequests.length > 0 ? pendingRequests.map(req => ({
+                                    ...req,
+                                    fileNumber: req.fileNumber,
+                                    fileSubject: req.fileSubject,
+                                    fileId: req.fileId
+                                })) && pendingRequests.map(req => (
                                     <TableRow key={req.id}>
                                         <TableCell>
                                             <div className="flex flex-col max-w-[110px]">

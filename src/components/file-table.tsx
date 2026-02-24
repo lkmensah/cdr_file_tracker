@@ -203,7 +203,7 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
     );
   }
 
-  const staticOffices = ['registry', 'dpp', 'cd', 'hr'];
+  const staticOffices = ['registry', 'ag', 'dag', 'dpp', 'cd', 'hr'];
 
   return (
     <>

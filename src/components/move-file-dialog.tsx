@@ -88,7 +88,7 @@ export function MoveFileDialog({ isOpen, onOpenChange, files }: MoveFileDialogPr
         return a.label.localeCompare(b.label);
     });
 
-    const offices = ['Registry', 'DPP', 'CD', 'HR'];
+    const offices = ['Registry', 'AG', 'DAG', 'DPP', 'CD', 'HR'];
     offices.reverse().forEach(office => {
         if (!list.some(o => o.value === office)) {
             list.unshift({ label: office, value: office });
@@ -235,7 +235,7 @@ export function MoveFileDialog({ isOpen, onOpenChange, files }: MoveFileDialogPr
                                     <FormLabel className="text-[10px] uppercase font-bold text-muted-foreground">Lead Practitioner</FormLabel>
                                     <div className="min-w-0">
                                         <Combobox
-                                            options={attorneyOptions.filter(o => !['Registry', 'DPP', 'CD', 'HR'].includes(o.value))}
+                                            options={attorneyOptions.filter(o => !['Registry', 'AG', 'DAG', 'DPP', 'CD', 'HR'].includes(o.value))}
                                             value={field.value}
                                             onChange={field.onChange}
                                             placeholder="Select lead..."

@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -449,7 +448,7 @@ export default function PortalFileDetail() {
                                 </div>
                                 <div className="space-y-1">
                                     <h3 className="text-lg font-black text-amber-900 uppercase tracking-tight">Physical File Arrival</h3>
-                                    <p className="text-sm text-amber-700 font-medium">The physical folder for this case has been delivered to your desk. Please inspect and confirm receipt to unlock the digital workspace.</p>
+                                    <p className="text-sm text-amber-700 font-medium">The physical folder for this case has been delivered to your office. Please inspect and confirm receipt to unlock the digital workspace.</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -565,9 +564,10 @@ function LetterDetails({ letter, index, total, fileNumber, onDataChange }: { let
 }
 
 function MovementDetails({ movement, index, total, fileNumber, fileSubject, isLatest, onDataChange }: { movement: Movement, index: number, total: number, fileNumber: string, fileSubject: string, isLatest: boolean, onDataChange: () => void }) {
+    const staticOffices = ['registry', 'ag', 'dag', 'dpp', 'cd', 'hr'];
     return (
         <div className="space-y-4">
-            <div className="flex justify-between items-start"><h4 className="text-md font-semibold">Movement #{total - index}</h4>{movement.receivedAt ? (<Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1.5 py-1"><CheckCircle2 className="h-3.5 w-3.5" /> Received</Badge>) : (movement.movedTo?.toLowerCase() !== 'registry' ? (<Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 gap-1.5 py-1"><Truck className="h-3.5 w-3.5" /> In Transit</Badge>) : null)}</div>
+            <div className="flex justify-between items-start"><h4 className="text-md font-semibold">Movement #{total - index}</h4>{movement.receivedAt ? (<Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1.5 py-1"><CheckCircle2 className="h-3.5 w-3.5" /> Received</Badge>) : (!staticOffices.includes(movement.movedTo?.toLowerCase()) ? (<Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 gap-1.5 py-1"><Truck className="h-3.5 w-3.5" /> In Transit</Badge>) : null)}</div>
             <div className="grid gap-4 sm:grid-cols-2">
                 <div><h4 className="text-xs font-semibold text-muted-foreground">Date Moved</h4><p className="text-sm">{toDate(movement.date) ? format(toDate(movement.date)!, 'PPP') : 'N/A'}</p></div>
                 <div><h4 className="text-xs font-semibold text-muted-foreground">Moved To</h4><p className="text-sm">{movement.movedTo}</p></div>
