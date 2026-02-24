@@ -1,6 +1,3 @@
-
-'use server';
-
 import type { CorrespondenceFile, Letter, Movement, ArchiveRecord, CensusRecord, Attorney, CaseReminder, InternalDraft, InternalInstruction, FileRequest, Milestone, Attachment, Reminder } from '@/lib/types';
 import {
     Timestamp,

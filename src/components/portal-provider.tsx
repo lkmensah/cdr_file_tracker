@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -61,13 +60,21 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     React.useEffect(() => {
         if (!attorney) return;
 
+        const performHeartbeat = async () => {
+            try {
+                // Silently attempt presence update. Background heartbeats should never crash the UI on failure.
+                await updateAttorneyPresence(attorney.id);
+            } catch (e) {
+                // Ignore transient network errors during background keep-alive
+                console.debug("Background presence update deferred.");
+            }
+        };
+
         // Send initial heartbeat
-        updateAttorneyPresence(attorney.id);
+        performHeartbeat();
 
         // Send periodic heartbeats every 4 minutes (keep-alive)
-        const interval = setInterval(() => {
-            updateAttorneyPresence(attorney.id);
-        }, 1000 * 60 * 4);
+        const interval = setInterval(performHeartbeat, 1000 * 60 * 4);
 
         return () => clearInterval(interval);
     }, [attorney]);
@@ -127,9 +134,10 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
         // 1. Signal offline status to server immediately and await it
         if (currentId) {
             try {
+                // We await this to ensure the server registers the logout before the local state is wiped
                 await setAttorneyOffline(currentId);
             } catch (e) {
-                console.error("Logout Signal Error:", e);
+                console.warn("Offline signal deferred due to connection issues.");
             }
         }
 

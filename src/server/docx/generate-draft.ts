@@ -1,4 +1,3 @@
-'use server';
 /**
  * @fileOverview Server-side DOCX generation engine.
  * 
