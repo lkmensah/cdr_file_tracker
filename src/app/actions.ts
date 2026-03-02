@@ -33,21 +33,50 @@ async function verifyAndGetUser(clientToken: string): Promise<{decodedToken: Dec
 
 const NewFileSchema = z.object({
     fileNumber: z.string().min(1, 'File number is required.'),
-    suitNumber: z.string(),
+    suitNumber: z.string().optional().or(z.literal('')),
     category: z.string().min(1, 'Category is required.'),
-    group: z.string().min(1, 'Group is required.'),
+    group: z.string().optional().or(z.literal('')),
     subject: z.string().min(1, 'Subject is required.'),
     dateCreated: z.string().min(1, 'Date created is required.'),
-    assignedTo: z.string().optional(),
-    coAssignees: z.string().optional(), // Expected as comma separated string from form
+    assignedTo: z.string().optional().or(z.literal('')),
+    coAssignees: z.string().optional().or(z.literal('')), 
     isJudgmentDebt: z.string().optional(),
     amountGHC: z.string().optional(),
     amountUSD: z.string().optional(),
+}).refine(data => {
+    // Group is mandatory for everything EXCEPT Miscellaneous
+    if (data.category.toLowerCase() !== 'miscellaneous' && (!data.group || data.group.trim() === '')) {
+        return false;
+    }
+    return true;
+}, {
+    message: 'Group is required for this category.',
+    path: ['group'],
 });
 
-const UpdateFileSchema = NewFileSchema.extend({
+const UpdateFileSchema = z.object({
     id: z.string().min(1, 'File ID is required.'),
+    fileNumber: z.string().min(1, 'File number is required.'),
+    suitNumber: z.string().optional().or(z.literal('')),
+    category: z.string().min(1, 'Category is required.'),
+    group: z.string().optional().or(z.literal('')),
+    subject: z.string().min(1, 'Subject is required.'),
+    dateCreated: z.string().min(1, 'Date created is required.'),
+    assignedTo: z.string().optional().or(z.literal('')),
+    coAssignees: z.string().optional().or(z.literal('')), 
+    isJudgmentDebt: z.string().optional(),
+    amountGHC: z.string().optional(),
+    amountUSD: z.string().optional(),
     treatAsNew: z.string().optional(),
+}).refine(data => {
+    // Group is mandatory for everything EXCEPT Miscellaneous
+    if (data.category.toLowerCase() !== 'miscellaneous' && (!data.group || data.group.trim() === '')) {
+        return false;
+    }
+    return true;
+}, {
+    message: 'Group is required for this category.',
+    path: ['group'],
 });
 
 const BaseCorrespondenceSchema = z.object({
