@@ -53,14 +53,14 @@ function cleanContent(html: string): string {
  * Generates a Word document buffer with official Ghanaian header specifications.
  */
 export async function generateLegalDocBuffer(draft: InternalDraft, file: CorrespondenceFile, type: 'letter' | 'memo'): Promise<Buffer> {
-  // Path Discovery: Prioritizing the 'templates' folder as specified by the user.
+  // Path Discovery: Using the specific path provided by the user.
   const rootPath = process.cwd();
   const searchPaths = [
+    path.join(rootPath, 'server', 'docx', 'templates', 'coat-of-arms.png'),
+    path.join(rootPath, 'src', 'server', 'docx', 'templates', 'coat-of-arms.png'),
     path.join(rootPath, 'templates', 'coat-of-arms.png'),
     path.join(rootPath, 'public', 'templates', 'coat-of-arms.png'),
-    path.join(rootPath, 'src', 'server', 'docx', 'templates', 'coat-of-arms.png'),
     path.join(rootPath, 'public', 'coat-of-arms.png'),
-    path.join(rootPath, 'coat-of-arms.png'),
   ];
   
   let coatOfArmsBuffer: Buffer | null = null;
