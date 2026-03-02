@@ -27,7 +27,7 @@ import {
 } from 'docx';
 
 /**
- * Strips HTML tags for clean text injection.
+ * Strips HTML tags for clean text injection while preserving basic list structures.
  */
 function cleanContent(html: string): string {
   if (!html) return '';
@@ -38,6 +38,9 @@ function cleanContent(html: string): string {
     .replace(/<strong>/gi, '').replace(/<\/strong>/gi, '')
     .replace(/<em>/gi, '').replace(/<\/em>/gi, '')
     .replace(/<u>/gi, '').replace(/<\/u>/gi, '')
+    .replace(/<ul[^>]*>/gi, '').replace(/<\/ul>/gi, '')
+    .replace(/<ol[^>]*>/gi, '').replace(/<\/ol>/gi, '')
+    .replace(/<li[^>]*>/gi, '• ').replace(/<\/li>/gi, '\n')
     .replace(/<[^>]*>/g, '')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
@@ -50,22 +53,37 @@ function cleanContent(html: string): string {
  * Generates a Word document buffer with official Ghanaian header specifications.
  */
 export async function generateLegalDocBuffer(draft: InternalDraft, file: CorrespondenceFile, type: 'letter' | 'memo'): Promise<Buffer> {
-  // Resilient Path Discovery for cross-platform support (Win 10 vs Win 11)
-  const possiblePaths = [
-    path.join(process.cwd(), 'public', 'coat-of-arms.png'),
-    path.join(process.cwd(), 'src', 'server', 'docx', 'templates', 'coat-of-arms.png'),
-    path.join(process.cwd(), 'public', 'templates', 'coat-of-arms.png'),
-    // Node-standard fallback
-    path.resolve(__dirname, 'templates', 'coat-of-arms.png'),
+  // FINAL SOLUTION: Robust Path Discovery
+  // We prioritize the 'public' folder at the project root as it's the most reliable location.
+  const rootPath = process.cwd();
+  const searchPaths = [
+    path.join(rootPath, 'public', 'coat-of-arms.png'),
+    path.join(rootPath, 'public', 'templates', 'coat-of-arms.png'),
+    path.join(rootPath, 'coat-of-arms.png'),
+    // Fallback for compiled environments
+    path.join(rootPath, '.next', 'server', 'vendor-chunks', 'coat-of-arms.png'),
     path.resolve(__dirname, '..', '..', '..', 'public', 'coat-of-arms.png'),
   ];
   
-  let coatOfArmsPath = "";
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) {
-      coatOfArmsPath = p;
-      break;
+  let coatOfArmsBuffer: Buffer | null = null;
+  let foundPath = "";
+
+  for (const p of searchPaths) {
+    try {
+      if (fs.existsSync(p)) {
+        coatOfArmsBuffer = fs.readFileSync(p);
+        foundPath = p;
+        break;
+      }
+    } catch (e) {
+      console.error(`Error reading path: ${p}`, e);
     }
+  }
+
+  if (!coatOfArmsBuffer) {
+    console.warn("COAT OF ARMS NOT FOUND. Checked paths:", searchPaths);
+  } else {
+    console.log("Coat of Arms loaded successfully from:", foundPath);
   }
 
   const now = format(new Date(), 'do MMMM yyyy');
@@ -87,19 +105,16 @@ export async function generateLegalDocBuffer(draft: InternalDraft, file: Corresp
   const sections = [];
 
   // 1. Column Ratios Configuration
-  // col1: Logo | col2: Ministry Name | col3: Address/Refs
   const col1Width = type === 'memo' ? 15 : 25;
   const col2Width = type === 'memo' ? 70 : 40;
   const col3Width = type === 'memo' ? 15 : 35;
   
-  // Title Stretching: Memo uses 200 twips, Letter uses 250 twips symmetrical
   const titleCellMargins = type === 'memo' 
     ? { left: 200, right: 200 } 
     : { left: 250, right: 250 };
   
   const rightBlockChildren = [];
   if (type === 'letter') {
-    // Letter: 5-line Block sequence + Bold 10pt Date
     rightBlockChildren.push(
       new Paragraph({ 
         alignment: AlignmentType.LEFT,
@@ -127,9 +142,7 @@ export async function generateLegalDocBuffer(draft: InternalDraft, file: Corresp
         spacing: { before: 0, after: 0 } 
       })
     );
-    // Drop the date one step down (12pt spacing)
     rightBlockChildren.push(new Paragraph({ spacing: { before: 240, after: 0 } }));
-    // Date (Bold 10pt Calibri)
     rightBlockChildren.push(
       new Paragraph({ 
         alignment: AlignmentType.LEFT,
@@ -137,7 +150,6 @@ export async function generateLegalDocBuffer(draft: InternalDraft, file: Corresp
       })
     );
   } else {
-    // Memo: Only File Number at far right
     rightBlockChildren.push(
       new Paragraph({ 
         alignment: AlignmentType.RIGHT,
@@ -160,11 +172,10 @@ export async function generateLegalDocBuffer(draft: InternalDraft, file: Corresp
     rows: [
       new TableRow({
         children: [
-          // Cell 1: Logo + Vertical Divider
           new TableCell({
             width: { size: col1Width, type: WidthType.PERCENTAGE },
             verticalAlign: VerticalAlign.CENTER,
-            margins: { right: 300 }, // Gap between logo and divider
+            margins: { right: 300 },
             borders: {
               right: { style: BorderStyle.SINGLE, size: 6, color: "000000" },
               top: { style: BorderStyle.NONE },
@@ -172,15 +183,14 @@ export async function generateLegalDocBuffer(draft: InternalDraft, file: Corresp
               left: { style: BorderStyle.NONE },
             },
             children: [
-              coatOfArmsPath ? 
+              coatOfArmsBuffer ? 
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
-                  children: [new ImageRun({ data: fs.readFileSync(coatOfArmsPath), transformation: { width: 128, height: 105 } })],
+                  children: [new ImageRun({ data: coatOfArmsBuffer, transformation: { width: 128, height: 105 } })],
                 }) :
                 new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "GHANA", bold: true, size: 24 })] }),
             ],
           }),
-          // Cell 2: Ministry Name
           new TableCell({
             width: { size: col2Width, type: WidthType.PERCENTAGE },
             verticalAlign: VerticalAlign.CENTER,
@@ -194,7 +204,6 @@ export async function generateLegalDocBuffer(draft: InternalDraft, file: Corresp
               }),
             ],
           }),
-          // Cell 3: Right Block
           new TableCell({
             width: { size: col3Width, type: WidthType.PERCENTAGE },
             verticalAlign: VerticalAlign.TOP,
@@ -208,9 +217,7 @@ export async function generateLegalDocBuffer(draft: InternalDraft, file: Corresp
   sections.push(headerTable);
 
   if (type === 'letter') {
-    // Letter Body (Effective 1.0" Margins via 0.5" indent + 0.5" page margin)
     const activeIndent = { left: 720, right: 720 };
-
     sections.push(new Paragraph({ spacing: { before: 800 }, indent: activeIndent }));
     sections.push(new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -219,7 +226,6 @@ export async function generateLegalDocBuffer(draft: InternalDraft, file: Corresp
       indent: activeIndent
     }));
 
-    // Body content - JUSTIFIED
     cleanContent(draft.content).split('\n\n').forEach(p => {
       if (!p.trim()) return;
       sections.push(
@@ -232,7 +238,6 @@ export async function generateLegalDocBuffer(draft: InternalDraft, file: Corresp
       );
     });
 
-    // Signatory - CAPS
     sections.push(
       new Paragraph({ 
         spacing: { before: 800 }, 
@@ -246,7 +251,6 @@ export async function generateLegalDocBuffer(draft: InternalDraft, file: Corresp
     );
 
   } else {
-    // Memo Layout (Locked Standard)
     sections.push(new Paragraph({
       alignment: AlignmentType.LEFT,
       children: [new TextRun({ text: "MEMORANDUM", bold: true, size: 28, font: "Times New Roman", underline: {} })],
@@ -272,7 +276,6 @@ export async function generateLegalDocBuffer(draft: InternalDraft, file: Corresp
       }));
     });
     
-    // Body content - JUSTIFIED
     cleanContent(draft.content).split('\n\n').forEach(p => {
       if (!p.trim()) return;
       sections.push(
@@ -284,7 +287,6 @@ export async function generateLegalDocBuffer(draft: InternalDraft, file: Corresp
       );
     });
 
-    // Signatory
     sections.push(
       new Paragraph({ 
         spacing: { before: 800 }, 
