@@ -50,17 +50,21 @@ function cleanContent(html: string): string {
  * Generates a Word document buffer with official Ghanaian header specifications.
  */
 export async function generateLegalDocBuffer(draft: InternalDraft, file: CorrespondenceFile, type: 'letter' | 'memo'): Promise<Buffer> {
-  // Resilient Path Discovery: Check multiple standard locations for the asset
-  const srcPath = path.resolve(process.cwd(), 'src/server/docx/templates', 'coat-of-arms.png');
-  const publicPath = path.resolve(process.cwd(), 'public', 'coat-of-arms.png');
-  const alternativePublicPath = path.resolve(process.cwd(), 'public', 'templates', 'coat-of-arms.png');
+  // Resilient Path Discovery for cross-platform support (Win 10 vs Win 11)
+  const possiblePaths = [
+    path.join(process.cwd(), 'public', 'coat-of-arms.png'),
+    path.join(process.cwd(), 'src', 'server', 'docx', 'templates', 'coat-of-arms.png'),
+    path.join(process.cwd(), 'public', 'templates', 'coat-of-arms.png'),
+    // Node-standard fallback
+    path.resolve(__dirname, 'templates', 'coat-of-arms.png'),
+    path.resolve(__dirname, '..', '..', '..', 'public', 'coat-of-arms.png'),
+  ];
   
-  let coatOfArmsPath = srcPath;
-  if (!fs.existsSync(coatOfArmsPath)) {
-    if (fs.existsSync(publicPath)) {
-      coatOfArmsPath = publicPath;
-    } else if (fs.existsSync(alternativePublicPath)) {
-      coatOfArmsPath = alternativePublicPath;
+  let coatOfArmsPath = "";
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      coatOfArmsPath = p;
+      break;
     }
   }
 
@@ -168,12 +172,12 @@ export async function generateLegalDocBuffer(draft: InternalDraft, file: Corresp
               left: { style: BorderStyle.NONE },
             },
             children: [
-              fs.existsSync(coatOfArmsPath) ? 
+              coatOfArmsPath ? 
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
                   children: [new ImageRun({ data: fs.readFileSync(coatOfArmsPath), transformation: { width: 128, height: 105 } })],
                 }) :
-                new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "GHANA", bold: true })] }),
+                new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "GHANA", bold: true, size: 24 })] }),
             ],
           }),
           // Cell 2: Ministry Name
