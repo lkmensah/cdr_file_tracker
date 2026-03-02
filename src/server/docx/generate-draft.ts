@@ -50,7 +50,20 @@ function cleanContent(html: string): string {
  * Generates a Word document buffer with official Ghanaian header specifications.
  */
 export async function generateLegalDocBuffer(draft: InternalDraft, file: CorrespondenceFile, type: 'letter' | 'memo'): Promise<Buffer> {
-  const coatOfArmsPath = path.resolve(process.cwd(), 'src/server/docx/templates', 'coat-of-arms.png');
+  // Resilient Path Discovery: Check multiple standard locations for the asset
+  const srcPath = path.resolve(process.cwd(), 'src/server/docx/templates', 'coat-of-arms.png');
+  const publicPath = path.resolve(process.cwd(), 'public', 'coat-of-arms.png');
+  const alternativePublicPath = path.resolve(process.cwd(), 'public', 'templates', 'coat-of-arms.png');
+  
+  let coatOfArmsPath = srcPath;
+  if (!fs.existsSync(coatOfArmsPath)) {
+    if (fs.existsSync(publicPath)) {
+      coatOfArmsPath = publicPath;
+    } else if (fs.existsSync(alternativePublicPath)) {
+      coatOfArmsPath = alternativePublicPath;
+    }
+  }
+
   const now = format(new Date(), 'do MMMM yyyy');
 
   // Fetch Attorney Rank for Memo FROM field
