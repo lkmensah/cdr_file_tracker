@@ -53,16 +53,14 @@ function cleanContent(html: string): string {
  * Generates a Word document buffer with official Ghanaian header specifications.
  */
 export async function generateLegalDocBuffer(draft: InternalDraft, file: CorrespondenceFile, type: 'letter' | 'memo'): Promise<Buffer> {
-  // FINAL SOLUTION: Robust Path Discovery
-  // We prioritize the 'public' folder at the project root as it's the most reliable location.
+  // Path Discovery: Prioritizing the 'templates' folder as specified by the user.
   const rootPath = process.cwd();
   const searchPaths = [
-    path.join(rootPath, 'public', 'coat-of-arms.png'),
+    path.join(rootPath, 'templates', 'coat-of-arms.png'),
     path.join(rootPath, 'public', 'templates', 'coat-of-arms.png'),
+    path.join(rootPath, 'src', 'server', 'docx', 'templates', 'coat-of-arms.png'),
+    path.join(rootPath, 'public', 'coat-of-arms.png'),
     path.join(rootPath, 'coat-of-arms.png'),
-    // Fallback for compiled environments
-    path.join(rootPath, '.next', 'server', 'vendor-chunks', 'coat-of-arms.png'),
-    path.resolve(__dirname, '..', '..', '..', 'public', 'coat-of-arms.png'),
   ];
   
   let coatOfArmsBuffer: Buffer | null = null;
@@ -76,7 +74,7 @@ export async function generateLegalDocBuffer(draft: InternalDraft, file: Corresp
         break;
       }
     } catch (e) {
-      console.error(`Error reading path: ${p}`, e);
+      // Continue searching next path
     }
   }
 
