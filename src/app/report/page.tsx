@@ -515,7 +515,7 @@ export default function ReportPage() {
                             {reportType === 'quarterly' && (
                                 <div className="flex flex-col space-y-2">
                                 <Label htmlFor="quarter-select">Quarter</Label>
-                                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                                <Select value={selectedQuarter} onValueChange={setSelectedQuarter}>
                                         <SelectTrigger id="quarter-select">
                                             <SelectValue placeholder="Select quarter" />
                                         </SelectTrigger>
