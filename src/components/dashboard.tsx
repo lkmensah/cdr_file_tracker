@@ -1,7 +1,7 @@
 'use client';
 
 import type { CorrespondenceFile, Letter, Movement, Attorney, CaseReminder, FileRequest, Reminder, UserProfile } from '@/lib/types';
-import { Folder, Mail, Scale, Truck, CheckCircle2, Loader2, UserCheck, Users, Calendar, MessageCircle, MessageSquare, FileText, AlertCircle, HandIcon, Clock, Bell, History, Zap, AlarmClock, Send, ShieldCheck } from 'lucide-react';
+import { Folder, Mail, Scale, Truck, CheckCircle2, Loader2, UserCheck, Users, Calendar, MessageCircle, MessageSquare, FileText, AlertCircle, HandIcon, Clock, Bell, History, Zap, AlarmClock, Send, ShieldCheck, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DashboardChart } from './dashboard-chart';
 import { WorkloadAnalytics } from './workload-analytics';
@@ -15,6 +15,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -24,7 +34,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { useAuthAction } from '@/hooks/use-auth-action';
-import { confirmFileReceipt, toggleReminder, cancelFileRequest, markFileAsViewed, toggleGeneralReminder, recordNotification } from '@/app/actions';
+import { confirmFileReceipt, toggleReminder, cancelFileRequest, markFileAsViewed, toggleGeneralReminder, recordNotification, deleteFile } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, doc, query, where } from 'firebase/firestore';
@@ -69,6 +79,7 @@ export function Dashboard({
   const { isAdmin, profile, isSGSec } = useProfile();
   const [isInTransitOpen, setIsInTransitOpen] = React.useState(false);
   const [selectedFileId, setSelectedFileId] = React.useState<string | null>(null);
+  const [fileToDelete, setFileToDelete] = React.useState<{ id: string, fileNumber: string } | null>(null);
   const [currentTime, setCurrentTime] = React.useState(new Date());
   const { toast } = useToast();
 
@@ -193,6 +204,12 @@ export function Dashboard({
   const { exec: authCancelRequest } = useAuthAction(cancelFileRequest);
   const { exec: authMarkViewed } = useAuthAction(markFileAsViewed);
   const { exec: authRecordNotification } = useAuthAction(recordNotification);
+  const { exec: authDeleteFile, isLoading: isDeletingFile } = useAuthAction(deleteFile, {
+    onSuccess: () => {
+        toast({ title: 'File deleted permanentely.' });
+        setFileToDelete(null);
+    }
+  });
 
   const handleViewFile = (fileId: string) => {
     setSelectedFileId(fileId);
@@ -370,7 +387,7 @@ export function Dashboard({
                                         </div>
                                         <p className="text-xs font-bold truncate leading-tight">{r.text}</p>
                                         <div className="flex items-center justify-between gap-2 pt-1">
-                                            <p className="text-[10px] text-amber-600 font-black">{format(toDate(r.date)!, 'p')}</p>
+                                            <p className="text-[10px] text-amber-600 font-black">{format(toDate(reminder.date)!, 'p')}</p>
                                             <Button 
                                                 size="sm" 
                                                 className="h-7 text-[9px] bg-amber-600 hover:bg-amber-700 gap-1.5"
@@ -609,22 +626,35 @@ export function Dashboard({
                                                             {moveDate ? format(moveDate, 'MMM d, p') : 'N/A'}
                                                         </TableCell>
                                                         <TableCell className="text-right">
-                                                            {isSGSec ? (
-                                                                <Button 
-                                                                    size="sm" 
-                                                                    className="bg-green-600 hover:bg-green-700 h-8 gap-1.5" 
-                                                                    onClick={() => handleSecretariatConfirm(file)}
-                                                                    disabled={isConfirming}
-                                                                >
-                                                                    {isConfirming ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-                                                                    Confirm Arrival
-                                                                </Button>
-                                                            ) : (
-                                                                <Button size="sm" variant="ghost" className="h-8 hover:bg-green-50 hover:text-green-700 gap-1.5" onClick={() => handleNotifyAttorney(file)}>
-                                                                    <Send className="h-3 w-3" />
-                                                                    {file.latestMovement.notifiedByPhone ? 'Remind' : 'Notify'}
-                                                                </Button>
-                                                            )}
+                                                            <div className="flex justify-end items-center gap-2">
+                                                                {isAdmin && (
+                                                                    <Button 
+                                                                        variant="ghost" 
+                                                                        size="icon" 
+                                                                        className="h-8 w-8 text-destructive hover:bg-destructive/10" 
+                                                                        onClick={() => setFileToDelete({ id: file.id, fileNumber: file.fileNumber })}
+                                                                        title="Delete File"
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                )}
+                                                                {isSGSec ? (
+                                                                    <Button 
+                                                                        size="sm" 
+                                                                        className="bg-green-600 hover:bg-green-700 h-8 gap-1.5" 
+                                                                        onClick={() => handleSecretariatConfirm(file)}
+                                                                        disabled={isConfirming}
+                                                                    >
+                                                                        {isConfirming ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                                                                        Confirm Arrival
+                                                                    </Button>
+                                                                ) : (
+                                                                    <Button size="sm" variant="ghost" className="h-8 hover:bg-green-50 hover:text-green-700 gap-1.5" onClick={() => handleNotifyAttorney(file)}>
+                                                                        <Send className="h-3 w-3" />
+                                                                        {file.latestMovement.notifiedByPhone ? 'Remind' : 'Notify'}
+                                                                    </Button>
+                                                                )}
+                                                            </div>
                                                         </TableCell>
                                                     </TableRow>
                                                 )})}
@@ -643,6 +673,28 @@ export function Dashboard({
                 </div>
             </DialogContent>
         </Dialog>
+
+        <AlertDialog open={!!fileToDelete} onOpenChange={(open) => !open && setFileToDelete(null)}>
+            <AlertDialogContent className="w-[95vw] sm:max-w-lg">
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Permanentely delete file?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This will delete file <strong>{fileToDelete?.fileNumber}</strong> and all its associated correspondence and movement history. This action cannot be undone.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="flex flex-col sm:flex-row gap-2">
+                    <AlertDialogCancel disabled={isDeletingFile} className="sm:mt-0">Cancel</AlertDialogCancel>
+                    <AlertDialogAction 
+                        onClick={() => fileToDelete && authDeleteFile(fileToDelete.id)} 
+                        disabled={isDeletingFile} 
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                        {isDeletingFile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                        Delete Everything
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
 
         <FileDetailDialog
             file={selectedFileForDetail}
