@@ -183,7 +183,7 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
 
             const truncatedSubject = truncate(file.subject, 60);
             const message = encodeURIComponent(
-                `Hello ${recipientLabel},\n\nThe following physical file has been delivered to your office:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease reply to this thread with 'CONFIRMED' once you have the physical folder.\n\nThank you.`
+                `Hello ${recipientLabel},\n\nThe following physical file has been delivered to your office:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease reply to this thread with 'CONFIRMED' once you have the physical folder, or otherwise state any discrepancies.\n\nThank you.`
             );
             window.open(`https://wa.me/${notificationPhone.replace(/\D/g, '')}?text=${message}`, '_blank');
             toast({ title: "WhatsApp Alert Opened", description: `Notifying ${recipientLabel}.` });
@@ -345,10 +345,10 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
                                     {latestMovement.receivedAt ? (
                                         <div className="flex flex-col gap-0.5">
                                             <Badge variant="secondary" className="bg-green-500/10 text-green-600 border-green-500/20 px-1.5 py-0 text-[10px] w-fit gap-1 font-medium shrink-0">
-                                                <CheckCircle2 className="h-2.5 w-2.5" /> Received
+                                                <CheckCircle2 className="h-2.5 w-2.5" /> Confirmed
                                             </Badge>
                                             <span className="text-[10px] text-green-700 font-medium whitespace-nowrap ml-1">
-                                                By: {truncate(latestMovement.receivedBy || 'Staff', 15)}
+                                                By: {truncate(latestMovement.receivedBy || 'Practitioner', 15)}
                                             </span>
                                         </div>
                                     ) : (

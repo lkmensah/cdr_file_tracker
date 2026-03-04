@@ -247,7 +247,7 @@ export function Dashboard({
 
         const truncatedSubject = truncate(file.subject, 60);
         const message = encodeURIComponent(
-            `Hello ${recipientLabel},\n\nThe following physical file has been delivered to your office:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease reply to this message with 'CONFIRMED' once you have the physical folder at your desk.\n\nThank you.`
+            `Hello ${recipientLabel},\n\nThe following physical file has been delivered to your office:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease reply to this thread with 'CONFIRMED' once you have the physical folder, or otherwise state any discrepancies.\n\nThank you.`
         );
         window.open(`https://wa.me/${notificationPhone.replace(/\D/g, '')}?text=${message}`, '_blank');
         toast({ title: "WhatsApp Alert Opened", description: `Notifying ${recipientLabel}.` });
@@ -263,7 +263,7 @@ export function Dashboard({
     formData.append('movementId', file.latestMovement.id);
     const result = await authConfirmReceipt(formData);
     if (result && result.message.includes('Success')) {
-        toast({ title: "Handover Confirmed", description: "The folder is now officially marked as received by the practitioner." });
+        toast({ title: "Handover Confirmed", description: `Physical receipt attributed to ${file.latestMovement.movedTo}.` });
     }
   };
 
@@ -330,7 +330,7 @@ export function Dashboard({
 
         const fileList = files.map(f => `• *${f.fileNumber}* - ${truncate(f.subject, 60)}`).join('\n');
         const message = encodeURIComponent(
-            `Hello ${recipientLabel},\n\nThe following physical file(s) have been delivered to your office:\n\n${fileList}\n\nPlease reply to this thread with 'CONFIRMED' for all files once you have them physically at your desk.\n\nThank you.`
+            `Hello ${recipientLabel},\n\nThe following physical file(s) have been delivered to your office:\n\n${fileList}\n\nPlease reply to this thread with 'CONFIRMED' for all files once you have them physically at your desk, or otherwise state any discrepancies.\n\nThank you.`
         );
         window.open(`https://wa.me/${notificationPhone.replace(/\D/g, '')}?text=${message}`, '_blank');
         toast({ title: "Batch Notification Opened" });

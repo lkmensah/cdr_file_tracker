@@ -1,3 +1,4 @@
+
 import type { CorrespondenceFile, Letter, Movement, ArchiveRecord, CensusRecord, Attorney, CaseReminder, InternalDraft, InternalInstruction, FileRequest, Milestone, Attachment, Reminder } from '@/lib/types';
 import {
     Timestamp,
@@ -447,7 +448,7 @@ export const batchMoveFiles = async (data: any) => {
     return { success: true };
 };
 
-export const batchPickupFiles = async (fileNumbers: string[], receivedBy: string) => {
+export const batchPickupFiles = async (fileNumbers: string[], recordedBy: string) => {
     const firestore = getFirestore(initializeAdmin());
     const now = new Date();
     const pickupResults: Record<string, { fullName: string, phoneNumber: string, files: { fileNumber: string, subject: string }[] }> = {};
@@ -491,7 +492,8 @@ export const batchPickupFiles = async (fileNumbers: string[], receivedBy: string
                     movedTo: 'Registry',
                     status: 'Physically returned to Registry',
                     receivedAt: now,
-                    receivedBy: receivedBy.trim()
+                    receivedBy: 'Registry', // Default for return to source
+                    recordedBy: recordedBy.trim()
                 };
 
                 batch.update(doc.ref, {
@@ -528,19 +530,24 @@ export const deleteMovementFromFile = async (fileNumber: string, movementId: str
     return { success: true };
 };
 
-export const confirmFileReceipt = async (fileNumber: string, movementId: string, receivedBy: string) => {
+export const confirmFileReceipt = async (fileNumber: string, movementId: string, recordedBy: string) => {
     const snap = await getFileCollectionRef().where('fileNumber', '==', fileNumber.trim()).get();
     if (snap.empty) throw new Error("File not found.");
     const doc = snap.docs[0];
     const movements = (doc.data()!.movements || []).map((m: any) => {
-        if (m.id === movementId) return { ...m, receivedAt: new Date(), receivedBy: receivedBy.trim() };
+        if (m.id === movementId) return { 
+            ...m, 
+            receivedAt: new Date(), 
+            receivedBy: m.movedTo, // Change attribution to the Attorney
+            recordedBy: recordedBy.trim() // Registry staff who recorded it
+        };
         return m;
     });
     await doc.ref.update({ movements, lastActivityAt: FieldValue.serverTimestamp() });
     return { success: true };
 };
 
-export const batchConfirmReceipt = async (confirmations: { fileNumber: string, movementId: string }[], receivedBy: string) => {
+export const batchConfirmReceipt = async (confirmations: { fileNumber: string, movementId: string }[], recordedBy: string) => {
     const firestore = getFirestore(initializeAdmin());
     const now = new Date();
     
@@ -555,7 +562,12 @@ export const batchConfirmReceipt = async (confirmations: { fileNumber: string, m
             if (!snap.empty) {
                 const doc = snap.docs[0];
                 const movements = (doc.data().movements || []).map((m: any) => {
-                    if (m.id === conf.movementId) return { ...m, receivedAt: now, receivedBy: receivedBy.trim() };
+                    if (m.id === conf.movementId) return { 
+                        ...m, 
+                        receivedAt: now, 
+                        receivedBy: m.movedTo, // Change attribution to the Attorney
+                        recordedBy: recordedBy.trim() 
+                    };
                     return m;
                 });
                 batch.update(doc.ref, { movements, lastActivityAt: FieldValue.serverTimestamp() });

@@ -27,7 +27,8 @@ export type Movement = {
     movedTo: string;
     status: string;
     receivedAt?: Date;
-    receivedBy?: string;
+    receivedBy?: string; // This now stores the Attorney name
+    recordedBy?: string; // This stores the Registry Staff name
     notifiedByPhone?: string; // Contact of the registry staff who sent the notification
 };
 
