@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { CorrespondenceFile, Letter, Movement, Attorney, CaseReminder, FileRequest, Reminder, UserProfile } from '@/lib/types';
@@ -246,7 +247,7 @@ export function Dashboard({
 
         const truncatedSubject = truncate(file.subject, 60);
         const message = encodeURIComponent(
-            `Hello ${recipientLabel},\n\nThe following physical file has been delivered to your office:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease verify and confirm receipt of the physical folder in the tracking system.\n\nThank you.`
+            `Hello ${recipientLabel},\n\nThe following physical file has been delivered to your office:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease reply to this message with 'CONFIRMED' once you have the physical folder at your desk.\n\nThank you.`
         );
         window.open(`https://wa.me/${notificationPhone.replace(/\D/g, '')}?text=${message}`, '_blank');
         toast({ title: "WhatsApp Alert Opened", description: `Notifying ${recipientLabel}.` });
@@ -255,14 +256,14 @@ export function Dashboard({
     }
   };
 
-  const handleSecretariatConfirm = async (file: typeof inTransitFiles[0]) => {
+  const handleStaffConfirm = async (file: typeof inTransitFiles[0]) => {
     if (!profile) return;
     const formData = new FormData();
     formData.append('fileNumber', file.fileNumber);
     formData.append('movementId', file.latestMovement.id);
     const result = await authConfirmReceipt(formData);
     if (result && result.message.includes('Success')) {
-        toast({ title: "Secretariat Receipt Confirmed", description: "The folder is now marked as delivered to the SG's office. Her portal is now unlocked." });
+        toast({ title: "Handover Confirmed", description: "The folder is now officially marked as received by the practitioner." });
     }
   };
 
@@ -329,7 +330,7 @@ export function Dashboard({
 
         const fileList = files.map(f => `• *${f.fileNumber}* - ${truncate(f.subject, 60)}`).join('\n');
         const message = encodeURIComponent(
-            `Hello ${recipientLabel},\n\nThe following physical file(s) have been delivered to your office:\n\n${fileList}\n\nPlease log in to verify and confirm receipt of the physical folder(s).\n\nThank you.`
+            `Hello ${recipientLabel},\n\nThe following physical file(s) have been delivered to your office:\n\n${fileList}\n\nPlease reply to this thread with 'CONFIRMED' for all files once you have them physically at your desk.\n\nThank you.`
         );
         window.open(`https://wa.me/${notificationPhone.replace(/\D/g, '')}?text=${message}`, '_blank');
         toast({ title: "Batch Notification Opened" });
@@ -387,7 +388,7 @@ export function Dashboard({
                                         </div>
                                         <p className="text-xs font-bold truncate leading-tight">{r.text}</p>
                                         <div className="flex items-center justify-between gap-2 pt-1">
-                                            <p className="text-[10px] text-amber-600 font-black">{format(toDate(reminder.date)!, 'p')}</p>
+                                            <p className="text-[10px] text-amber-600 font-black">{format(toDate(r.date)!, 'p')}</p>
                                             <Button 
                                                 size="sm" 
                                                 className="h-7 text-[9px] bg-amber-600 hover:bg-amber-700 gap-1.5"
@@ -434,12 +435,7 @@ export function Dashboard({
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {pendingRequests.length > 0 ? pendingRequests.map(req => ({
-                                    ...req,
-                                    fileNumber: req.fileNumber,
-                                    fileSubject: req.fileSubject,
-                                    fileId: req.fileId
-                                })) && pendingRequests.map(req => (
+                                {pendingRequests.length > 0 ? pendingRequests.map(req => (
                                     <TableRow key={req.id}>
                                         <TableCell>
                                             <div className="flex flex-col max-w-[110px]">
@@ -572,11 +568,11 @@ export function Dashboard({
         <Dialog open={isInTransitOpen} onOpenChange={setIsInTransitOpen}>
             <DialogContent className="w-[95vw] sm:max-w-4xl max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>{isSGSec ? "Files Arriving at SG Secretariat" : "Files in Transit"}</DialogTitle>
+                    <DialogTitle>{isSGSec ? "Arrivals for SG" : "Files in Transit"}</DialogTitle>
                     <DialogDescription>
                         {isSGSec 
                             ? "Confirm arrival of physical folders at the Solicitor General's office." 
-                            : "Awaiting physical receipt confirmation from the assigned practitioners."
+                            : "Log notifications and confirm physical delivery from Registry staff."
                         }
                     </DialogDescription>
                 </DialogHeader>
@@ -610,7 +606,7 @@ export function Dashboard({
                                                     <TableHead className="w-[120px]">File No.</TableHead>
                                                     <TableHead>Subject</TableHead>
                                                     <TableHead className="w-[150px]">Date Moved</TableHead>
-                                                    <TableHead className="text-right w-[150px]">Action</TableHead>
+                                                    <TableHead className="text-right w-[180px]">Action</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
@@ -638,22 +634,24 @@ export function Dashboard({
                                                                         <Trash2 className="h-4 w-4" />
                                                                     </Button>
                                                                 )}
-                                                                {isSGSec ? (
+                                                                <div className="flex gap-1">
+                                                                    {!isSGSec && (
+                                                                        <Button size="sm" variant="ghost" className="h-8 hover:bg-green-50 hover:text-green-700 gap-1.5" onClick={() => handleNotifyAttorney(file)}>
+                                                                            <Send className="h-3 w-3" />
+                                                                            {file.latestMovement.notifiedByPhone ? 'Remind' : 'Notify'}
+                                                                        </Button>
+                                                                    )}
                                                                     <Button 
                                                                         size="sm" 
-                                                                        className="bg-green-600 hover:bg-green-700 h-8 gap-1.5" 
-                                                                        onClick={() => handleSecretariatConfirm(file)}
+                                                                        variant="outline"
+                                                                        className="border-green-200 text-green-700 hover:bg-green-50 h-8 gap-1.5" 
+                                                                        onClick={() => handleStaffConfirm(file)}
                                                                         disabled={isConfirming}
                                                                     >
                                                                         {isConfirming ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-                                                                        Confirm Arrival
+                                                                        Mark Received
                                                                     </Button>
-                                                                ) : (
-                                                                    <Button size="sm" variant="ghost" className="h-8 hover:bg-green-50 hover:text-green-700 gap-1.5" onClick={() => handleNotifyAttorney(file)}>
-                                                                        <Send className="h-3 w-3" />
-                                                                        {file.latestMovement.notifiedByPhone ? 'Remind' : 'Notify'}
-                                                                    </Button>
-                                                                )}
+                                                                </div>
                                                             </div>
                                                         </TableCell>
                                                     </TableRow>

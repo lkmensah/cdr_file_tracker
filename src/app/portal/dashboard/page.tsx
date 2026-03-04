@@ -74,7 +74,7 @@ import {
     formatDistanceToNow,
     differenceInDays
 } from 'date-fns';
-import { toggleReminder, addCaseReminder, toggleFilePin, addGeneralReminder, toggleGeneralReminder, markAllFilesAsViewed, confirmFileReceipt, batchConfirmReceipt } from '@/app/actions';
+import { toggleReminder, addCaseReminder, toggleFilePin, addGeneralReminder, toggleGeneralReminder, markAllFilesAsViewed } from '@/app/actions';
 import { cn } from '@/lib/utils';
 import {
     Dialog,
@@ -110,7 +110,6 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { playNotificationSound } from '@/lib/audio';
-import { Checkbox } from '@/components/ui/checkbox';
 
 const categories = [
     { value: 'all', label: 'All Categories' },
@@ -174,7 +173,6 @@ export default function PortalDashboard() {
     const [isSubmitting, setIsSubmitting] = React.useState(false);
 
     const [lastNotifiedId, setLastNotificationId] = React.useState<string | null>(null);
-    const [selectedArrivalIds, setSelectedArrivalIds] = React.useState<Set<string>>(new Set());
 
     const { exec: authTogglePin } = useAuthAction(toggleFilePin);
     const { exec: authToggleReminder } = useAuthAction(toggleReminder);
@@ -182,8 +180,6 @@ export default function PortalDashboard() {
     const { exec: authAddGeneralReminder } = useAuthAction(addGeneralReminder);
     const { exec: authToggleGeneralReminder } = useAuthAction(toggleGeneralReminder);
     const { exec: authClearAllViewed, isLoading: isClearing } = useAuthAction(markAllFilesAsViewed);
-    const { exec: authConfirmReceipt, isLoading: isConfirming } = useAuthAction(confirmFileReceipt);
-    const { exec: authBatchConfirm, isLoading: isBatchConfirming } = useAuthAction(batchConfirmReceipt);
 
     const filesQuery = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -203,7 +199,7 @@ export default function PortalDashboard() {
     }, [searchTerm]);
 
     const caseloads = React.useMemo(() => {
-        if (!allFiles || !attorney) return { primary: [], collaborative: [], action: [], pinned: [], oversight: [], completed: [], historical: [], all: [], arrivals: [] };
+        if (!allFiles || !attorney) return { primary: [], collaborative: [], action: [], pinned: [], oversight: [], completed: [], historical: [], all: [] };
         
         const term = searchTerm.toLowerCase();
         const primary: CorrespondenceFile[] = [];
@@ -214,7 +210,6 @@ export default function PortalDashboard() {
         const completed: CorrespondenceFile[] = [];
         const historical: CorrespondenceFile[] = [];
         const all: CorrespondenceFile[] = [];
-        const arrivals: CorrespondenceFile[] = [];
 
         const myName = attorney.fullName.toLowerCase().trim();
         const myGroup = attorney.group?.toLowerCase().trim();
@@ -244,8 +239,7 @@ export default function PortalDashboard() {
                 return b.id.localeCompare(a.id);
             });
             const latestMovement = movements[0];
-            const isAtMyDeskUnconfirmed = latestMovement?.movedTo?.toLowerCase().trim() === myName && !latestMovement.receivedAt;
-            const isAtMyDeskConfirmed = latestMovement?.movedTo?.toLowerCase().trim() === myName && !!latestMovement.receivedAt;
+            const isAtMyDesk = latestMovement?.movedTo?.toLowerCase().trim() === myName;
             
             const fileGroup = (file.group || 'no group yet').toLowerCase().trim();
             const isInMyGroup = (attorney.isGroupHead || attorney.isActingGroupHead) && !!myGroup && myGroup !== 'no group yet' && fileGroup === myGroup;
@@ -253,11 +247,7 @@ export default function PortalDashboard() {
             const isPinned = file.pinnedBy?.[attorney.id] === true;
             const wasPreviouslyInvolved = file.movements?.some(m => m.movedTo?.toLowerCase().trim() === myName);
 
-            if (isAtMyDeskUnconfirmed) {
-                arrivals.push(file);
-            }
-
-            if (isLead || isCoAssignee || isAtMyDeskConfirmed || isAtMyDeskUnconfirmed || isInMyGroup || isPinned) {
+            if (isLead || isCoAssignee || isAtMyDesk || isInMyGroup || isPinned) {
                 if (file.status === 'Completed') {
                     completed.push(file);
                 } else if (isPinned) {
@@ -266,7 +256,7 @@ export default function PortalDashboard() {
                     primary.push(file);
                 } else if (isCoAssignee) {
                     collaborative.push(file);
-                } else if (isAtMyDeskConfirmed) {
+                } else if (isAtMyDesk) {
                     action.push(file);
                 } else if (isInMyGroup) {
                     oversight.push(file);
@@ -276,7 +266,7 @@ export default function PortalDashboard() {
             }
         });
 
-        return { primary, collaborative, action, pinned, oversight, completed, historical, all, arrivals };
+        return { primary, collaborative, action, pinned, oversight, completed, historical, all };
     }, [allFiles, attorney, searchTerm, isSG]);
 
     const paginatedAllFiles = React.useMemo(() => {
@@ -285,96 +275,6 @@ export default function PortalDashboard() {
     }, [caseloads.all, currentPage]);
 
     const totalPages = Math.ceil(caseloads.all.length / PAGE_SIZE);
-
-    const handleConfirmReceipt = async (e: React.MouseEvent, file: CorrespondenceFile) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!attorney) return;
-
-        const latest = [...(file.movements || [])].sort((a,b) => {
-            const dateA = toDate(a.date)?.getTime() || 0;
-            const dateB = toDate(b.date)?.getTime() || 0;
-            if (dateB !== dateA) return dateB - dateA;
-            return b.id.localeCompare(a.id);
-        })[0];
-        if (!latest) return;
-
-        const formData = new FormData();
-        formData.append('fileNumber', file.fileNumber);
-        formData.append('movementId', latest.id);
-
-        const result = await authConfirmReceipt(formData);
-        if (result && result.message.includes('Success')) {
-            toast({ title: 'Receipt Confirmed', description: `File ${file.fileNumber} is now in your possession.` });
-        } else {
-            toast({ variant: 'destructive', title: 'Error', description: result?.message || 'Failed to confirm receipt.' });
-        }
-    }
-
-    const handleBatchConfirm = async () => {
-        if (selectedArrivalIds.size === 0) return;
-        
-        const confirmations = caseloads.arrivals
-            .filter(f => selectedArrivalIds.has(f.id))
-            .map(f => {
-                const latest = [...(f.movements || [])].sort((a,b) => {
-                    const dateA = toDate(a.date)?.getTime() || 0;
-                    const dateB = toDate(b.date)?.getTime() || 0;
-                    if (dateB !== dateA) return dateB - dateA;
-                    return b.id.localeCompare(a.id);
-                })[0];
-                return { fileNumber: f.fileNumber, movementId: latest.id };
-            });
-
-        const result = await authBatchConfirm(confirmations);
-        if (result && result.message.includes('Success')) {
-            toast({ title: 'Batch Confirmed', description: `${confirmations.length} files marked as received.` });
-            setSelectedArrivalIds(new Set());
-        }
-    };
-
-    const handleReportArrivalDiscrepancy = () => {
-        const allArrivals = caseloads.arrivals;
-        const confirmed = allArrivals.filter(f => selectedArrivalIds.has(f.id));
-        const missing = allArrivals.filter(f => !selectedArrivalIds.has(f.id));
-
-        // Use notifiedByPhone from the first file in the list as primary contact, fallback to registry
-        let registryPhone = '233244000000';
-        const firstFile = allArrivals[0];
-        if (firstFile) {
-            const latest = [...(firstFile.movements || [])].sort((a,b) => {
-                const dateA = toDate(a.date)?.getTime() || 0;
-                const dateB = toDate(b.date)?.getTime() || 0;
-                if (dateB !== dateA) return dateB - dateA;
-                return b.id.localeCompare(a.id);
-            })[0];
-            if (latest?.notifiedByPhone) registryPhone = latest.notifiedByPhone.replace(/\D/g, '');
-        }
-
-        let message = `Hello Registry,\n\nI am reporting a discrepancy in physical file arrivals for my desk.\n\n`;
-        
-        if (confirmed.length > 0) {
-            message += `FILES AT MY DESK (VERIFIED):\n${confirmed.map(f => `• ${f.fileNumber} - ${f.subject}`).join('\n')}\n\n`;
-        }
-        
-        if (missing.length > 0) {
-            message += `FILES MISSING / NOT AT MY DESK:\n${missing.map(f => `• ${f.fileNumber} - ${f.subject}`).join('\n')}\n\n`;
-        }
-
-        message += `Please verify physical location. Thank you.`;
-        
-        window.open(`https://wa.me/${registryPhone}?text=${encodeURIComponent(message)}`, '_blank');
-        toast({ title: 'Report Discrepancy', description: 'WhatsApp message prepared for Registry.' });
-    };
-
-    const toggleArrivalSelection = (id: string) => {
-        setSelectedArrivalIds(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
-    };
 
     const stagnantOversightFiles = React.useMemo(() => {
         const sourceList = isSG ? caseloads.all : caseloads.oversight;
@@ -496,7 +396,7 @@ export default function PortalDashboard() {
             if (latest) {
                 const d = toDate(latest.date);
                 if (d && isAfter(d, referencePoint) && !isAfter(d, now)) {
-                    if (isSG || (latest.movedTo.toLowerCase().trim() === myName && !latest.receivedAt)) {
+                    if (isSG || latest.movedTo.toLowerCase().trim() === myName) {
                         notes.push({ id: latest.id, fileId: file.id, fileNumber: file.fileNumber, message: isSG ? `File moved to ${latest.movedTo}` : `File moved to your desk`, timestamp: d, type: 'movement' });
                     }
                 }
@@ -529,7 +429,7 @@ export default function PortalDashboard() {
 
     const availableFiles = React.useMemo(() => {
         if (isSG) return allFiles?.filter(f => f.status !== 'Completed') || [];
-        return [...caseloads.pinned, ...caseloads.primary, ...caseloads.collaborative, ...caseloads.action, ...caseloads.arrivals];
+        return [...caseloads.pinned, ...caseloads.primary, ...caseloads.collaborative, ...caseloads.action];
     }, [caseloads, allFiles, isSG]);
 
     const fileOptions = React.useMemo(() => {
@@ -734,7 +634,7 @@ export default function PortalDashboard() {
     const endDate = endOfWeek(monthEnd);
     const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
 
-    const FileCard = ({ file, type }: { file: CorrespondenceFile, type: 'pinned' | 'primary' | 'collaborative' | 'action' | 'oversight' | 'completed' | 'historical' | 'all' | 'arrival' }) => {
+    const FileCard = ({ file, type }: { file: CorrespondenceFile, type: 'pinned' | 'primary' | 'collaborative' | 'action' | 'oversight' | 'completed' | 'historical' | 'all' }) => {
         const [isOpening, setIsOpening] = React.useState(false);
         const movements = [...(file.movements || [])].sort((a,b) => {
             const dateA = toDate(a.date)?.getTime() || 0;
@@ -743,7 +643,6 @@ export default function PortalDashboard() {
             return b.id.localeCompare(a.id);
         });
         const latestMovement = movements[0];
-        const isPendingReceipt = latestMovement?.movedTo?.toLowerCase().trim() === attorney.fullName.toLowerCase().trim() && !latestMovement.receivedAt;
         const isWithMe = latestMovement?.movedTo?.toLowerCase().trim() === attorney.fullName.toLowerCase().trim() && !!latestMovement.receivedAt;
         const isLead = file.assignedTo?.toLowerCase().trim() === attorney.fullName.toLowerCase().trim();
         const isTeam = file.coAssignees?.some(name => name.toLowerCase().trim() === attorney.fullName.toLowerCase().trim());
@@ -753,9 +652,6 @@ export default function PortalDashboard() {
         const isRecentlyUpdated = activityTime && isAfter(activityTime, subHours(new Date(), 24)) && (!lastViewedAt || isAfter(activityTime, lastViewedAt));
         const isCompleted = file.status === 'Completed';
 
-        const isArrival = type === 'arrival';
-        const isSelected = selectedArrivalIds.has(file.id);
-
         return (
             <div className="relative group h-full">
                 <Link 
@@ -764,7 +660,6 @@ export default function PortalDashboard() {
                     onClick={() => setIsOpening(true)}
                 >
                     <Card className={cn("h-full hover:border-primary transition-all duration-300 shadow-sm border-l-4 overflow-hidden flex flex-col group-hover:shadow-md", 
-                        isArrival ? (isSelected ? "border-l-primary bg-primary/5 ring-2 ring-primary/20" : "border-l-amber-500 bg-amber-50/10") :
                         isCompleted ? "border-l-green-500 bg-green-50/5 opacity-90" : 
                         type === 'pinned' ? "border-l-yellow-500 bg-yellow-50/10" : 
                         type === 'primary' ? "border-l-primary" : 
@@ -784,18 +679,16 @@ export default function PortalDashboard() {
                                             type === 'oversight' ? "text-purple-600" :
                                             type === 'historical' ? "text-muted-foreground" :
                                             "text-blue-600" )}>{file.fileNumber}</span>
-                                        {(isRecentlyUpdated || isPendingReceipt) && !isCompleted && type !== 'historical' && (
+                                        {isRecentlyUpdated && !isCompleted && type !== 'historical' && (
                                             <div className="flex items-center gap-1 shrink-0">
-                                                <div className={cn("h-1.5 w-1.5 rounded-full animate-pulse", isPendingReceipt ? "bg-amber-600" : "bg-red-600")} />
-                                                <span className={cn("text-[8px] font-black uppercase tracking-tight", isPendingReceipt ? 'Arrival' : 'New')}>{isPendingReceipt ? 'Arrival' : 'New'}</span>
+                                                <div className="h-1.5 w-1.5 rounded-full animate-pulse bg-red-600" />
+                                                <span className="text-[8px] font-black uppercase tracking-tight text-red-600">New</span>
                                             </div>
                                         )}
                                     </div>
                                     <div className="flex gap-1 shrink-0">
                                         {isCompleted ? (
                                             <Badge variant="secondary" className="text-[8px] uppercase h-4 bg-green-100 text-green-800 border-green-200">Resolved</Badge>
-                                        ) : isPendingReceipt ? (
-                                            <Badge variant="default" className="text-[8px] uppercase h-4 bg-amber-600 text-white border-none animate-bounce">Inspection Required</Badge>
                                         ) : isLead ? (
                                             <Badge variant="outline" className="text-[8px] uppercase h-4">Lead</Badge>
                                         ) : isTeam ? (
@@ -814,56 +707,25 @@ export default function PortalDashboard() {
                             </div>
 
                             <div className="pt-3 border-t space-y-2">
-                                {isArrival ? (
-                                    <div className="flex items-center gap-2">
-                                        <Button 
-                                            size="sm" 
-                                            className="flex-1 h-8 bg-amber-600 hover:bg-amber-700 text-white font-black uppercase text-[10px] tracking-widest gap-2"
-                                            onClick={(e) => handleConfirmReceipt(e, file)}
-                                            disabled={isConfirming}
-                                        >
-                                            {isConfirming ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-                                            Confirm
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="icon"
-                                            className="h-8 w-8 border-amber-300 text-amber-700 hover:bg-amber-50"
-                                            title="Report Error / File Not Here"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                const notifierPhone = latestMovement?.notifiedByPhone?.replace(/\D/g, '') || '233244000000';
-                                                const msg = encodeURIComponent(`Hello Registry,\n\nI am reporting an issue with file *${file.fileNumber}* (${file.subject}). It is showing as arriving at my desk but either it's not here or it's been sent to me in error.\n\nPlease verify.`);
-                                                window.open(`https://wa.me/${notifierPhone}?text=${msg}`, '_blank');
-                                            }}
-                                        >
-                                            <AlertCircle className="h-4 w-4" />
-                                        </Button>
+                                <div className="flex items-center justify-between text-[9px] uppercase font-bold tracking-widest text-muted-foreground">
+                                    <span className="truncate max-w-[60%]">{file.category}</span>
+                                    <span className="shrink-0">{format(toDate(file.lastActivityAt || file.reportableDate || file.dateCreated)!, 'MMM d')}</span>
+                                </div>
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                        <Badge variant="outline" className="bg-muted/30 text-[9px] h-5 py-0 border-none shrink-0">
+                                            <Truck className="h-2.5 w-2.5 mr-1" /> {isWithMe ? 'At My Desk' : (latestMovement?.movedTo || 'Registry')}
+                                        </Badge>
+                                        {!isLead && file.assignedTo && (
+                                            <span className="text-[9px] text-muted-foreground truncate italic">Lead: {file.assignedTo}</span>
+                                        )}
                                     </div>
-                                ) : (
-                                    <>
-                                        <div className="flex items-center justify-between text-[9px] uppercase font-bold tracking-widest text-muted-foreground">
-                                            <span className="truncate max-w-[60%]">{file.category}</span>
-                                            <span className="shrink-0">{format(toDate(file.lastActivityAt || file.reportableDate || file.dateCreated)!, 'MMM d')}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                                <Badge variant="outline" className="bg-muted/30 text-[9px] h-5 py-0 border-none shrink-0">
-                                                    <Truck className="h-2.5 w-2.5 mr-1" /> {isWithMe ? 'At My Desk' : (latestMovement?.movedTo || 'Registry')}
-                                                </Badge>
-                                                {!isLead && file.assignedTo && (
-                                                    <span className="text-[9px] text-muted-foreground truncate italic">Lead: {file.assignedTo}</span>
-                                                )}
-                                            </div>
-                                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0 group-hover:translate-x-0.5 transition-transform" />
-                                        </div>
-                                    </>
-                                )}
+                                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
-                    {!isCompleted && !isSG && type !== 'historical' && !isArrival && (
+                    {!isCompleted && !isSG && type !== 'historical' && (
                         <Button variant="ghost" size="icon" className={cn("absolute top-3 right-3 h-7 w-7 transition-all rounded-full bg-background/80 backdrop-blur-sm shadow-sm border", file.pinnedBy?.[attorney.id] ? "opacity-100 text-yellow-500 scale-110" : "opacity-0 group-hover:opacity-100 scale-100")} onClick={(e) => handleTogglePin(e, file.id)}>
                             <Star className={cn("h-3.5 w-3.5", file.pinnedBy?.[attorney.id] && "fill-current")} />
                         </Button>
@@ -877,14 +739,6 @@ export default function PortalDashboard() {
                         </div>
                     )}
                 </Link>
-                {isArrival && (
-                    <button 
-                        onClick={() => toggleArrivalSelection(file.id)}
-                        className={cn("absolute top-3 right-3 h-6 w-6 rounded-md border flex items-center justify-center transition-all z-20 shadow-sm", isSelected ? "bg-primary border-primary text-white" : "bg-white/80 border-amber-300 text-amber-600 hover:border-primary")}
-                    >
-                        {isSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-                    </button>
-                )}
             </div>
         );
     }
@@ -1116,54 +970,6 @@ export default function PortalDashboard() {
 
                         {!searchTerm && (
                             <div className="grid gap-10">
-                                {caseloads.arrivals.length > 0 && (
-                                    <section className="space-y-5 animate-in slide-in-from-top-4 duration-500">
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-amber-500/10 p-4 rounded-xl border border-amber-500/20">
-                                            <div className="flex items-center gap-3">
-                                                <Inbox className="h-5 w-5 text-amber-600 animate-bounce" />
-                                                <div className="space-y-0.5">
-                                                    <h3 className="text-xs font-black text-amber-700 uppercase tracking-[0.2em]">Unconfirmed Physical Arrivals</h3>
-                                                    <p className="text-[10px] text-amber-600 font-medium">Verify physical receipt of the folders at your desk.</p>
-                                                </div>
-                                                <Badge className="bg-amber-600 text-white border-none h-5 px-2 py-0 text-[10px] font-bold">{caseloads.arrivals.length}</Badge>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Button 
-                                                    size="sm" 
-                                                    variant="outline" 
-                                                    className="h-9 border-amber-300 text-amber-700 bg-amber-50 font-bold gap-2"
-                                                    onClick={handleReportArrivalDiscrepancy}
-                                                >
-                                                    <MessageCircle className="h-4 w-4" />
-                                                    Report Discrepancy
-                                                </Button>
-                                                {selectedArrivalIds.size > 0 && (
-                                                    <Button 
-                                                        size="sm" 
-                                                        className="h-9 bg-amber-600 hover:bg-amber-700 text-white font-black uppercase tracking-widest gap-2 px-6"
-                                                        onClick={handleBatchConfirm}
-                                                        disabled={isBatchConfirming}
-                                                    >
-                                                        {isBatchConfirming ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                                                        Confirm {selectedArrivalIds.size} Selected
-                                                    </Button>
-                                                )}
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="sm" 
-                                                    className="h-9 text-[10px] uppercase font-bold text-amber-700"
-                                                    onClick={() => setSelectedArrivalIds(new Set(selectedArrivalIds.size === caseloads.arrivals.length ? [] : caseloads.arrivals.map(f => f.id)))}
-                                                >
-                                                    {selectedArrivalIds.size === caseloads.arrivals.length ? 'Deselect All' : 'Select All'}
-                                                </Button>
-                                            </div>
-                                        </div>
-                                        <div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                                            {caseloads.arrivals.map(file => <FileCard key={file.id} file={file} type="arrival" />)}
-                                        </div>
-                                    </section>
-                                )}
-
                                 {activeReminders.length > 0 && (
                                     <section className="space-y-5 min-w-0">
                                         <h3 className="text-[10px] font-black flex items-center gap-3 text-primary uppercase tracking-[0.2em] bg-primary/5 w-fit px-4 py-2 rounded-lg border border-primary/10">

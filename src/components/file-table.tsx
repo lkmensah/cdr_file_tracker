@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -29,7 +30,7 @@ import { BatchPickupDialog } from './batch-pickup-dialog';
 import { format, isAfter, subHours } from 'date-fns';
 import { useDoc, useFirestore, useMemoFirebase, useCollection } from '@/firebase';
 import { doc, collection, query, where } from 'firebase/firestore';
-import { deleteFile, toggleFileStatus, markFileAsViewed, recordNotification } from '@/app/actions';
+import { deleteFile, toggleFileStatus, markFileAsViewed, recordNotification, confirmFileReceipt } from '@/app/actions';
 import { useAuthAction } from '@/hooks/use-auth-action';
 import { useToast } from '@/hooks/use-toast';
 import { useProfile } from './auth-provider';
@@ -89,6 +90,7 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
 
   const { exec: authMarkViewed } = useAuthAction(markFileAsViewed);
   const { exec: authRecordNotification } = useAuthAction(recordNotification);
+  const { exec: authConfirmReceipt } = useAuthAction(confirmFileReceipt);
 
   const selectedFileRef = useMemoFirebase(() => {
     if (!firestore || !selectedFileId) return null;
@@ -181,12 +183,32 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
 
             const truncatedSubject = truncate(file.subject, 60);
             const message = encodeURIComponent(
-                `Hello ${recipientLabel},\n\nThe following physical file has been delivered to your office:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease verify and confirm receipt of the physical folder in the system.\n\nThank you.`
+                `Hello ${recipientLabel},\n\nThe following physical file has been delivered to your office:\n\n• *${file.fileNumber}* - ${truncatedSubject}\n\nPlease reply to this thread with 'CONFIRMED' once you have the physical folder.\n\nThank you.`
             );
             window.open(`https://wa.me/${notificationPhone.replace(/\D/g, '')}?text=${message}`, '_blank');
             toast({ title: "WhatsApp Alert Opened", description: `Notifying ${recipientLabel}.` });
         } else {
             toast({ variant: 'destructive', title: "No Contact Info", description: `${recipientLabel} has no registered phone number.` });
+        }
+    }
+  };
+
+  const handleManualConfirm = async (file: CorrespondenceFile) => {
+    const movements = Array.isArray(file.movements) ? file.movements : [];
+    const latest = [...movements].sort((a, b) => {
+        const dateA = toDate(a.date)?.getTime() || 0;
+        const dateB = toDate(b.date)?.getTime() || 0;
+        if (dateB !== dateA) return dateB - dateA;
+        return b.id.localeCompare(a.id);
+    })[0];
+
+    if (latest && profile) {
+        const formData = new FormData();
+        formData.append('fileNumber', file.fileNumber);
+        formData.append('movementId', latest.id);
+        const result = await authConfirmReceipt(formData);
+        if (result && result.message.includes('Success')) {
+            toast({ title: 'Receipt Recorded' });
         }
     }
   };
@@ -326,7 +348,7 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
                                                 <CheckCircle2 className="h-2.5 w-2.5" /> Received
                                             </Badge>
                                             <span className="text-[10px] text-green-700 font-medium whitespace-nowrap ml-1">
-                                                On: {format(toDate(latestMovement.receivedAt)!, 'MMM d, yyyy')}
+                                                By: {truncate(latestMovement.receivedBy || 'Staff', 15)}
                                             </span>
                                         </div>
                                     ) : (
@@ -369,13 +391,22 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
                                         Move File
                                     </DropdownMenuItem>
                                     {latestMovement && !latestMovement.receivedAt && !isOffice && (
-                                        <DropdownMenuItem 
-                                            onClick={() => handleNotifyWhatsApp(file)} 
-                                            disabled={isCompleted}
-                                        >
-                                            <MessageCircle className="mr-2 h-4 w-4 text-green-600" />
-                                            {latestMovement.notifiedByPhone ? 'Remind' : 'Notify'}
-                                        </DropdownMenuItem>
+                                        <>
+                                            <DropdownMenuItem 
+                                                onClick={() => handleNotifyWhatsApp(file)} 
+                                                disabled={isCompleted}
+                                            >
+                                                <MessageCircle className="mr-2 h-4 w-4 text-green-600" />
+                                                Notify (WhatsApp)
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem 
+                                                onClick={() => handleManualConfirm(file)} 
+                                                disabled={isCompleted}
+                                            >
+                                                <CheckCircle2 className="mr-2 h-4 w-4 text-primary" />
+                                                Mark as Received
+                                            </DropdownMenuItem>
+                                        </>
                                     )}
                                     <DropdownMenuItem 
                                         onClick={() => onEditFile(file)}
@@ -513,7 +544,7 @@ export function FileTable({ files, onEditFile }: { files: CorrespondenceFile[], 
                     This will delete file <strong>{fileToDelete?.fileNumber}</strong> and all its associated correspondence and movement history.
                 </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter className="flex flex-col sm:flex-row gap-2">
+            <AlertDialogFooter>
                 <AlertDialogCancel disabled={isDeleting} className="sm:mt-0">Cancel</AlertDialogCancel>
                 <AlertDialogAction onClick={() => fileToDelete && authDelete(fileToDelete.id)} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                     {isDeleting ? 'Deleting...' : 'Delete Everything'}
