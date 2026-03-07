@@ -34,7 +34,6 @@ The system operates through two distinct, synchronized interfaces:
 - **Judgment Debt Analytics:** Automated currency-based reporting (GHS/USD) for high-risk litigation.
 - **Stagnant File Exception Reporting:** Automatic flagging of cases with no activity within a 14-day threshold.
 
-## 5. Strategic Impact
-- **Increased Accountability:** Every physical movement is logged with a clear audit trail of who dispatched, who notified, and who confirmed.
-- **Operational Efficiency:** Reduces time spent on manual file searches and status inquiries.
-- **Data-Driven Decision Making:** Provides executive leadership with accurate data on attorney workloads and national financial exposure.
+## 5. Documentation & Deliverables
+- **[Comprehensive Project Proposal](./docs/PROPOSAL.md)**: Academic framework including Methodology and Literature Review.
+- **[Operational Manual](./GUIDELINES.md)**: Step-by-step workflow for Registry Staff, Attorneys, and Executive Leadership.
