@@ -51,9 +51,9 @@ type AttorneySummary = {
 };
 
 type ReportData = {
-  summary: Record<string, CategorySummary>;
+  summary: [string, CategorySummary][];
   attorneyWorkload: Record<string, AttorneySummary>;
-  details: Record<string, (CorrespondenceFile & { currentStatus: string })[]>;
+  details: [string, (CorrespondenceFile & { currentStatus: string })[]][];
   judgmentDebtSummary: {
     totalCases: number;
     totalAmountGHC: number;
@@ -62,6 +62,26 @@ type ReportData = {
   };
   period: string;
   categoryFilter: string;
+};
+
+const CATEGORY_DISPLAY_ORDER = [
+    'civil cases (local)',
+    'civil cases (int\'l)',
+    'civil cases (regions)',
+    'arbitration (local)',
+    'arbitration (int\'l)',
+    'judgment-debt'
+];
+
+const sortCategories = (a: string, b: string) => {
+    const indexA = CATEGORY_DISPLAY_ORDER.indexOf(a.toLowerCase());
+    const indexB = CATEGORY_DISPLAY_ORDER.indexOf(b.toLowerCase());
+    
+    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+    if (indexA !== -1) return -1;
+    if (indexB !== -1) return 1;
+    
+    return a.localeCompare(b);
 };
 
 const categories = [
@@ -212,9 +232,9 @@ export default function ReportPage() {
         periodDescription = `Year: ${year}`;
     }
 
-    const summary: Record<string, CategorySummary> = {};
+    const summaryMap: Record<string, CategorySummary> = {};
     const attorneyWorkload: Record<string, AttorneySummary> = {};
-    const details: Record<string, (CorrespondenceFile & { currentStatus: string })[]> = {};
+    const detailsMap: Record<string, (CorrespondenceFile & { currentStatus: string })[]> = {};
     const judgmentDebtSummary = {
         totalCases: 0,
         totalAmountGHC: 0,
@@ -243,14 +263,14 @@ export default function ReportPage() {
             }
         }
 
-        if (!summary[category]) {
-            summary[category] = { total: 0, inProgress: 0, completed: 0 };
+        if (!summaryMap[category]) {
+            summaryMap[category] = { total: 0, inProgress: 0, completed: 0 };
         }
-        summary[category].total++;
+        summaryMap[category].total++;
         if (status === 'In Progress') {
-            summary[category].inProgress++;
+            summaryMap[category].inProgress++;
         } else {
-            summary[category].completed++;
+            summaryMap[category].completed++;
         }
 
         if (assignedTo !== 'Registry') {
@@ -272,32 +292,32 @@ export default function ReportPage() {
             judgmentDebtSummary.cases.push({ ...file, currentStatus });
         }
 
-        if (!details[category]) {
-            details[category] = [];
+        if (!detailsMap[category]) {
+            detailsMap[category] = [];
         }
-        details[category].push({ ...file, currentStatus });
+        detailsMap[category].push({ ...file, currentStatus });
     });
 
-    Object.values(details).forEach(fileList => {
+    // Sort the summaries and detail groups by the custom ordering
+    const sortedSummaryEntries = Object.entries(summaryMap).sort((a, b) => sortCategories(a[0], b[0]));
+    const sortedDetailEntries = Object.entries(detailsMap).sort((a, b) => sortCategories(a[0], b[0]));
+
+    sortedDetailEntries.forEach(([, fileList]) => {
         fileList.sort((a, b) => a.fileNumber.localeCompare(b.fileNumber));
     });
 
     setReportData({ 
-        summary, 
+        summary: sortedSummaryEntries, 
         attorneyWorkload,
-        details, 
+        details: sortedDetailEntries, 
         judgmentDebtSummary,
         period: periodDescription,
         categoryFilter: selectedCategory === 'all' ? 'All Categories' : categories.find(c => c.value === selectedCategory)?.label || selectedCategory
     });
   };
 
-  /**
-   * PDF-safe currency formatting that replaces special symbols with text codes.
-   */
   const formatCurrencyForPDF = (amount: number = 0, currency: 'GHS' | 'USD' = 'GHS') => {
     const formatted = formatCurrency(amount, currency);
-    // Replace the Cedi symbol which often breaks in PDF standard fonts
     return formatted.replace('GH₵', 'GHS ').replace('$', '$ ');
   };
 
@@ -315,7 +335,7 @@ export default function ReportPage() {
     doc.text('Summary by Category', 14, 45);
     autoTable(doc, {
       head: [['Category', 'Total Files', 'In Progress', 'Completed']],
-      body: Object.entries(reportData.summary).map(([category, data]) => [
+      body: reportData.summary.map(([category, data]) => [
         category,
         data.total,
         data.inProgress,
@@ -350,23 +370,25 @@ export default function ReportPage() {
 
     finalY = (doc as any).lastAutoTable.finalY || finalY + 100;
     doc.setFontSize(14);
-    doc.text('Detailed File List', 14, finalY + 15);
+    doc.text('Detailed File List (Grouped)', 14, finalY + 15);
 
-    Object.entries(reportData.details).forEach(([category, fileList]) => {
-        finalY = (doc as any).lastAutoTable.finalY;
+    reportData.details.forEach(([category, fileList]) => {
+        finalY = (doc as any).lastAutoTable.finalY || (finalY + 20);
         if (finalY > 250) { 
             doc.addPage();
             finalY = 15;
         }
 
         autoTable(doc, {
-            head: [[{ content: category, colSpan: 4, styles: { fontStyle: 'bold', fillColor: [230, 230, 230], textColor: 20 } }]],
+            head: [[{ content: category.toUpperCase(), colSpan: 4, styles: { fontStyle: 'bold', fillColor: [230, 230, 230], textColor: 20 } }]],
             body: [
                 ['File Number', 'Subject', 'Assigned To', 'Current Status'],
                 ...fileList.map(file => [file.fileNumber, file.subject, file.assignedTo || 'N/A', file.currentStatus])
             ],
             startY: finalY + 5,
             theme: 'grid',
+            styles: { fontSize: 8 },
+            headStyles: { fillColor: [100, 100, 100] },
         });
     });
 
@@ -383,7 +405,7 @@ export default function ReportPage() {
 
     csvContent += 'Category Summary\n';
     csvContent += 'Category,Total Files,In Progress,Completed\n';
-    Object.entries(reportData.summary).forEach(([category, data]) => {
+    reportData.summary.forEach(([category, data]) => {
       csvContent += `"${category}",${data.total},${data.inProgress},${data.completed}\n`;
     });
 
@@ -391,22 +413,22 @@ export default function ReportPage() {
 
     if (reportData.judgmentDebtSummary.totalCases > 0) {
         csvContent += 'Judgment Debt Breakdown\n';
-        csvContent += 'File Number,Subject,Assigned To,Amount (GHS),Amount (USD)\n';
+        csvContent += 'File Number,Subject,Assigned To,Amount (GHC),Amount (USD)\n';
         reportData.judgmentDebtSummary.cases.forEach(c => {
             csvContent += `"${c.fileNumber}","${c.subject.replace(/"/g, '""')}","${c.assignedTo || 'N/A'}",${c.amountGHC || c.amountInvolved},${c.amountUSD}\n`;
         });
         csvContent += `TOTAL,${reportData.judgmentDebtSummary.totalCases} cases,,${reportData.judgmentDebtSummary.totalAmountGHC},${reportData.judgmentDebtSummary.totalAmountUSD}\n\n`;
     }
 
-    csvContent += 'Detailed File List\n';
-    csvContent += 'Category,File Number,Subject,Assigned To,Current Status\n';
-    Object.entries(reportData.details).forEach(([category, fileList]) => {
+    csvContent += 'Detailed File List (Grouped)\n';
+    reportData.details.forEach(([category, fileList]) => {
+      csvContent += `\nCATEGORY: ${category.toUpperCase()}\n`;
+      csvContent += 'File Number,Subject,Assigned To,Current Status\n';
       fileList.forEach(file => {
         const row = [
-          category,
           file.fileNumber,
           `"${file.subject.replace(/"/g, '""')}"`, 
-          file.assignedTo || 'N/A',
+          `"${(file.assignedTo || 'N/A').replace(/"/g, '""')}"`,
           `"${file.currentStatus.replace(/"/g, '""')}"` 
         ].join(',');
         csvContent += row + '\n';
@@ -629,9 +651,9 @@ export default function ReportPage() {
                              <div>
                                 <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                                     <FileIcon className="h-5 w-5 text-primary" />
-                                    Summary by Category
+                                    Summary by Category (Sorted)
                                 </h3>
-                                {Object.keys(reportData.summary).length > 0 ? (
+                                {reportData.summary.length > 0 ? (
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
@@ -642,7 +664,7 @@ export default function ReportPage() {
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {Object.entries(reportData.summary).map(([category, summary]) => (
+                                            {reportData.summary.map(([category, summary]) => (
                                                 <TableRow key={category}>
                                                     <TableCell className="capitalize font-medium">{category}</TableCell>
                                                     <TableCell className="text-right">{summary.total}</TableCell>
@@ -663,7 +685,7 @@ export default function ReportPage() {
                                 <div className="flex items-center justify-between mb-4">
                                     <h3 className="text-lg font-semibold flex items-center gap-2">
                                         <Users className="h-5 w-5 text-primary" />
-                                        Attorney Workload Analysis (Dashboard Only)
+                                        Attorney Workload Analysis
                                     </h3>
                                 </div>
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
@@ -722,13 +744,15 @@ export default function ReportPage() {
                              </div>
                              
                              <div>
-                                <h3 className="text-lg font-semibold mb-4">Detailed File List</h3>
-                                {Object.keys(reportData.details).length > 0 ? (
+                                <h3 className="text-lg font-semibold mb-4">Detailed File List (Grouped by Category)</h3>
+                                {reportData.details.length > 0 ? (
                                 <Accordion type="single" collapsible className="w-full">
-                                    {Object.entries(reportData.details).map(([category, fileList]) => (
+                                    {reportData.details.map(([category, fileList]) => (
                                         <AccordionItem value={category} key={category}>
-                                            <AccordionTrigger className="text-md font-medium capitalize">{category} ({fileList.length} files)</AccordionTrigger>
-                                            <AccordionContent>
+                                            <AccordionTrigger className="text-md font-bold capitalize bg-muted/20 px-4 rounded-md">
+                                                {category} ({fileList.length} files)
+                                            </AccordionTrigger>
+                                            <AccordionContent className="pt-4">
                                                 <Table>
                                                     <TableHeader>
                                                         <TableRow>
@@ -741,10 +765,10 @@ export default function ReportPage() {
                                                     <TableBody>
                                                         {fileList.map(file => (
                                                             <TableRow key={file.id}>
-                                                                <TableCell className="font-medium">{file.fileNumber}</TableCell>
-                                                                <TableCell className="max-w-[200px] truncate">{file.subject}</TableCell>
-                                                                <TableCell>{file.assignedTo || 'N/A'}</TableCell>
-                                                                <TableCell>{file.currentStatus}</TableCell>
+                                                                <TableCell className="font-medium font-mono text-xs">{file.fileNumber}</TableCell>
+                                                                <TableCell className="max-w-[300px] truncate text-xs">{file.subject}</TableCell>
+                                                                <TableCell className="text-xs">{file.assignedTo || 'N/A'}</TableCell>
+                                                                <TableCell className="text-xs font-bold">{file.currentStatus}</TableCell>
                                                             </TableRow>
                                                         ))}
                                                     </TableBody>
