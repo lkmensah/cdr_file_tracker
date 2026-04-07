@@ -247,8 +247,14 @@ export default function ReportPage() {
     });
 
     filteredFiles.forEach(file => {
+        // FIX: Exclude files with unassigned or blank categories
+        const rawCategory = file.category?.trim();
+        if (!rawCategory || rawCategory.toLowerCase() === 'uncategorized' || rawCategory.toLowerCase() === 'unassigned') {
+            return;
+        }
+
         const { status, currentStatus } = getFileStatus(file);
-        const category = file.category || 'Uncategorized';
+        const category = rawCategory;
         
         let assignedTo = 'Unassigned / Other';
         if (file.assignedTo) {
@@ -298,7 +304,6 @@ export default function ReportPage() {
         detailsMap[category].push({ ...file, currentStatus });
     });
 
-    // Sort the summaries and detail groups by the custom ordering
     const sortedSummaryEntries = Object.entries(summaryMap).sort((a, b) => sortCategories(a[0], b[0]));
     const sortedDetailEntries = Object.entries(detailsMap).sort((a, b) => sortCategories(a[0], b[0]));
 
