@@ -70,7 +70,14 @@ const CATEGORY_DISPLAY_ORDER = [
     'civil cases (regions)',
     'arbitration (local)',
     'arbitration (int\'l)',
-    'judgment-debt'
+    'contract/agreement',
+    'legal advice/opinion',
+    'petition',
+    'notice of intention',
+    'mou',
+    'garnishee',
+    'international organisations/associations',
+    'miscellaneous'
 ];
 
 const sortCategories = (a: string, b: string) => {
@@ -247,7 +254,7 @@ export default function ReportPage() {
     });
 
     filteredFiles.forEach(file => {
-        // FIX: Exclude files with unassigned or blank categories
+        // Exclude files with unassigned or blank categories
         const rawCategory = file.category?.trim();
         if (!rawCategory || rawCategory.toLowerCase() === 'uncategorized' || rawCategory.toLowerCase() === 'unassigned') {
             return;
