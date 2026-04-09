@@ -4,16 +4,17 @@
 import { CensusPage } from '@/components/census-page';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import type { CensusRecord, CorrespondenceFile } from '@/lib/types';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { collection, query, orderBy, limit } from 'firebase/firestore';
 import React from 'react';
 
 export default function Census() {
   const firestore = useFirestore();
 
+  // PRODUCTION OPTIMIZATION: Limit initial load to 150 records to prevent 'Rate Exceeded'
   const censusQuery = useMemoFirebase(
     () => {
         if (!firestore) return null;
-        return query(collection(firestore, 'census'), orderBy('date', 'desc'));
+        return query(collection(firestore, 'census'), orderBy('date', 'desc'), limit(150));
     },
     [firestore]
   );
@@ -21,7 +22,7 @@ export default function Census() {
   const filesQuery = useMemoFirebase(
     () => {
         if (!firestore) return null;
-        return query(collection(firestore, 'files'), orderBy('dateCreated', 'desc'));
+        return query(collection(firestore, 'files'), orderBy('dateCreated', 'desc'), limit(150));
     },
     [firestore]
   );
@@ -32,7 +33,7 @@ export default function Census() {
   const isLoading = (isLoadingRecords || isLoadingFiles) && (!records || !files);
   
   if (isLoading) {
-    return <div className="flex-1 p-4 sm:p-6 md:p-8">Loading...</div>;
+    return <div className="flex-1 p-4 sm:p-6 md:p-8">Loading census data...</div>;
   }
 
   return (

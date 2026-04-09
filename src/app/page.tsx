@@ -1,86 +1,70 @@
+
 'use client';
 import { Dashboard } from '@/components/dashboard';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import type { CorrespondenceFile, Letter, UserProfile, Reminder } from '@/lib/types';
-import { collection, query, orderBy, where } from 'firebase/firestore';
+import { collection, query, orderBy, where, limit } from 'firebase/firestore';
 import React from 'react';
 
 export default function Home() {
   const firestore = useFirestore();
 
-  // Query for all files
+  // Optimized Dashboard: Only fetch the most recent files for visual context
+  // Detailed stats are now handled via Aggregation Server Actions
   const filesQuery = useMemoFirebase(
     () => {
       if (!firestore) return null;
-      return query(collection(firestore, 'files'), orderBy('dateCreated', 'desc'));
+      return query(collection(firestore, 'files'), orderBy('dateCreated', 'desc'), limit(200));
     },
     [firestore]
   );
   const { data: files, isLoading: isLoadingFiles } = useCollection<CorrespondenceFile>(filesQuery);
 
-  // Query for general reminders (not tied to a specific file)
   const generalRemindersQuery = useMemoFirebase(
     () => {
       if (!firestore) return null;
-      return query(collection(firestore, 'reminders'), where('isCompleted', '==', false));
+      return query(collection(firestore, 'reminders'), where('isCompleted', '==', false), limit(50));
     },
     [firestore]
   );
   const { data: generalReminders, isLoading: isLoadingReminders } = useCollection<Reminder>(generalRemindersQuery);
 
-  // Query for all users to map phone numbers for WhatsApp
   const usersQuery = useMemoFirebase(
     () => {
       if (!firestore) return null;
-      return query(collection(firestore, 'users'));
+      return query(collection(firestore, 'users'), limit(100));
     },
     [firestore]
   );
   const { data: users, isLoading: isLoadingUsers } = useCollection<UserProfile>(usersQuery);
 
-  // Query for all assigned and unassigned incoming mail
-  const incomingMailAssignedQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return query(collection(firestore, 'files')); // We'll filter letters on the client
-  }, [firestore]);
-  const { data: filesForMail, isLoading: isLoadingMailAssigned } = useCollection<CorrespondenceFile>(incomingMailAssignedQuery);
-
   const incomingMailUnassignedQuery = useMemoFirebase(() => {
     if (!firestore) return null;
-    return query(collection(firestore, 'unassignedLetters'), where('type', '==', 'Incoming'));
+    return query(collection(firestore, 'unassignedLetters'), where('type', '==', 'Incoming'), limit(100));
   }, [firestore]);
   const { data: unassignedMail, isLoading: isLoadingMailUnassigned } = useCollection<Letter>(incomingMailUnassignedQuery);
 
-  const allIncomingMail = React.useMemo(() => {
-    const assigned = filesForMail?.flatMap(f => f.letters.filter(l => l.type === 'Incoming')) || [];
-    return [...assigned, ...(unassignedMail || [])];
-  }, [filesForMail, unassignedMail]);
-
-  // Query for all assigned and unassigned court processes
-  const courtProcessesAssignedQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return query(collection(firestore, 'files')); // Filter on client
-  }, [firestore]);
-  const { data: filesForProcesses, isLoading: isLoadingProcessesAssigned } = useCollection<CorrespondenceFile>(courtProcessesAssignedQuery);
-
   const courtProcessesUnassignedQuery = useMemoFirebase(() => {
     if (!firestore) return null;
-    return query(collection(firestore, 'unassignedLetters'), where('type', '==', 'Court Process'));
+    return query(collection(firestore, 'unassignedLetters'), where('type', '==', 'Court Process'), limit(100));
   }, [firestore]);
   const { data: unassignedProcesses, isLoading: isLoadingProcessesUnassigned } = useCollection<Letter>(courtProcessesUnassignedQuery);
 
+  const allIncomingMail = React.useMemo(() => {
+    const assigned = files?.flatMap(f => f.letters.filter(l => l.type === 'Incoming')) || [];
+    return [...assigned, ...(unassignedMail || [])];
+  }, [files, unassignedMail]);
+
   const allCourtProcesses = React.useMemo(() => {
-    const assigned = filesForProcesses?.flatMap(f => f.letters.filter(l => l.type === 'Court Process')) || [];
+    const assigned = files?.flatMap(f => f.letters.filter(l => l.type === 'Court Process')) || [];
     return [...assigned, ...(unassignedProcesses || [])];
-  }, [filesForProcesses, unassignedProcesses]);
+  }, [files, unassignedProcesses]);
   
   const isLoadingData =
     isLoadingFiles ||
     isLoadingReminders ||
     isLoadingUsers ||
-    isLoadingMailAssigned ||
     isLoadingMailUnassigned ||
-    isLoadingProcessesAssigned ||
     isLoadingProcessesUnassigned;
 
   if (isLoadingData && !files) {

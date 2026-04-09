@@ -73,9 +73,65 @@ export const addAuditLog = async (logData: any) => {
     });
 };
 
-export const getFiles = async (): Promise<CorrespondenceFile[]> => {
-    const snapshot = await getFileCollectionRef().orderBy('dateCreated', 'desc').get();
+/**
+ * AGGREGATION HELPERS: Prevents 'Rate Exceeded' by getting counts instead of docs.
+ */
+export const getDashboardStats = async () => {
+    const filesCount = await getFileCollectionRef().count().get();
+    const incomingCount = await getUnassignedLettersCollectionRef().where('type', '==', 'Incoming').count().get();
+    const courtCount = await getUnassignedLettersCollectionRef().where('type', '==', 'Court Process').count().get();
+    
+    return {
+        totalFiles: filesCount.data().count,
+        totalIncoming: incomingCount.data().count,
+        totalCourtProcesses: courtCount.data().count
+    };
+};
+
+export const getFiles = async (limit: number = 100): Promise<CorrespondenceFile[]> => {
+    const snapshot = await getFileCollectionRef().orderBy('dateCreated', 'desc').limit(limit).get();
     return snapshot.docs.map(doc => docToType<CorrespondenceFile>(doc));
+};
+
+export const globalSearch = async (term: string) => {
+    const lowerTerm = term.toLowerCase().trim();
+    if (!lowerTerm) return { files: [], incomingMail: [], courtProcesses: [], archives: [], censusRecords: [] };
+
+    // Note: Firestore doesn't support full-text OR queries natively.
+    // We perform prefix queries on key identifying fields.
+    const fileNumSearch = await getFileCollectionRef()
+        .where('fileNumber', '>=', term.toUpperCase())
+        .where('fileNumber', '<=', term.toUpperCase() + '\uf8ff')
+        .limit(20)
+        .get();
+
+    const incomingSearch = await getUnassignedLettersCollectionRef()
+        .where('type', '==', 'Incoming')
+        .where('documentNo', '>=', term)
+        .where('documentNo', '<=', term + '\uf8ff')
+        .limit(20)
+        .get();
+
+    const courtSearch = await getUnassignedLettersCollectionRef()
+        .where('type', '==', 'Court Process')
+        .where('documentNo', '>=', term)
+        .where('documentNo', '<=', term + '\uf8ff')
+        .limit(20)
+        .get();
+
+    const archiveSearch = await getArchiveCollectionRef()
+        .where('fileNumber', '>=', term.toUpperCase())
+        .where('fileNumber', '<=', term.toUpperCase() + '\uf8ff')
+        .limit(20)
+        .get();
+
+    return {
+        files: fileNumSearch.docs.map(d => docToType<CorrespondenceFile>(d)),
+        incomingMail: incomingSearch.docs.map(d => docToType<Letter>(d)),
+        courtProcesses: courtSearch.docs.map(d => docToType<Letter>(d)),
+        archives: archiveSearch.docs.map(d => docToType<ArchiveRecord>(d)),
+        censusRecords: [] // Census usually redundant with File search in global context
+    };
 };
 
 export const createFile = async (fileData: any): Promise<{ file?: CorrespondenceFile, error?: string }> => {
@@ -210,7 +266,6 @@ export const markAllFilesAsViewed = async (ids: string[], viewerId: string): Pro
     const firestore = getFirestore(initializeAdmin());
     const now = FieldValue.serverTimestamp();
     
-    // Firestore limit: 500 operations per batch. Processing in chunks of 450.
     const CHUNK_SIZE = 450;
     for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
         const chunk = ids.slice(i, i + CHUNK_SIZE);
@@ -375,7 +430,6 @@ export const moveFile = async (data: any): Promise<{ file?: CorrespondenceFile, 
     const fileDoc = fileSnapshot.docs[0];
     const fileData = fileDoc.data()!;
     
-    // Resolve group of the recipient resiliently from the Registry
     let resolvedGroup = 'no group yet';
     const attorneySnap = await getAttorneyCollectionRef().get();
     const attorneys = attorneySnap.docs.map(d => docToType<Attorney>(d));
@@ -492,7 +546,7 @@ export const batchPickupFiles = async (fileNumbers: string[], recordedBy: string
                     movedTo: 'Registry',
                     status: 'Physically returned to Registry',
                     receivedAt: now,
-                    receivedBy: 'Registry', // Default for return to source
+                    receivedBy: 'Registry', 
                     recordedBy: recordedBy.trim()
                 };
 
@@ -538,8 +592,8 @@ export const confirmFileReceipt = async (fileNumber: string, movementId: string,
         if (m.id === movementId) return { 
             ...m, 
             receivedAt: new Date(), 
-            receivedBy: m.movedTo, // Change attribution to the Attorney
-            recordedBy: recordedBy.trim() // Registry staff who recorded it
+            receivedBy: m.movedTo, 
+            recordedBy: recordedBy.trim() 
         };
         return m;
     });
@@ -551,7 +605,6 @@ export const batchConfirmReceipt = async (confirmations: { fileNumber: string, m
     const firestore = getFirestore(initializeAdmin());
     const now = new Date();
     
-    // Process in chunks of 450 to stay under batch limit
     const CHUNK_SIZE = 450;
     for (let i = 0; i < confirmations.length; i += CHUNK_SIZE) {
         const chunk = confirmations.slice(i, i + CHUNK_SIZE);
@@ -565,7 +618,7 @@ export const batchConfirmReceipt = async (confirmations: { fileNumber: string, m
                     if (m.id === conf.movementId) return { 
                         ...m, 
                         receivedAt: now, 
-                        receivedBy: m.movedTo, // Change attribution to the Attorney
+                        receivedBy: m.movedTo, 
                         recordedBy: recordedBy.trim() 
                     };
                     return m;
@@ -880,14 +933,12 @@ export const propagateAttorneyNameChange = async (oldName: string, newName: stri
     const normalizedOld = oldName.trim().toLowerCase();
     const trimmedNew = newName.trim();
 
-    // 1. Update Census (usually small enough for one batch)
     const censusBatch = firestore.batch();
     censusSnapshot.docs.forEach(doc => {
         censusBatch.update(doc.ref, { attorney: trimmedNew });
     });
     await censusBatch.commit();
 
-    // 2. Update Files (chunked)
     const docs = filesSnapshot.docs;
     const CHUNK_SIZE = 450;
 

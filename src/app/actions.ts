@@ -17,7 +17,6 @@ async function verifyAndGetUser(clientToken: string): Promise<{decodedToken: Dec
         const decodedToken = await adminAuth.verifyIdToken(clientToken);
         const userRecord = await adminAuth.getUser(decodedToken.uid);
         
-        // Robust name detection for all user types (Staff, Admin, or Anonymous Practitioner)
         const fullName = 
             userRecord.displayName || 
             decodedToken.name || 
@@ -29,6 +28,22 @@ async function verifyAndGetUser(clientToken: string): Promise<{decodedToken: Dec
         console.error("Error verifying auth token:", error);
         throw new Error('Authentication Error: Invalid user token.');
     }
+}
+
+/**
+ * PRODUCTION OPTIMIZATION: Get aggregate stats without fetching docs.
+ */
+export async function getAggregatedDashboardStats(clientToken: string) {
+    await verifyAndGetUser(clientToken);
+    return await db.getDashboardStats();
+}
+
+/**
+ * PRODUCTION OPTIMIZATION: Perform targeted search on server.
+ */
+export async function performGlobalSearch(clientToken: string, term: string) {
+    await verifyAndGetUser(clientToken);
+    return await db.globalSearch(term);
 }
 
 const NewFileSchema = z.object({
@@ -44,7 +59,6 @@ const NewFileSchema = z.object({
     amountGHC: z.string().optional(),
     amountUSD: z.string().optional(),
 }).refine(data => {
-    // Group is mandatory for everything EXCEPT Miscellaneous
     if (data.category.toLowerCase() !== 'miscellaneous' && (!data.group || data.group.trim() === '')) {
         return false;
     }
@@ -69,7 +83,6 @@ const UpdateFileSchema = z.object({
     amountUSD: z.string().optional(),
     treatAsNew: z.string().optional(),
 }).refine(data => {
-    // Group is mandatory for everything EXCEPT Miscellaneous
     if (data.category.toLowerCase() !== 'miscellaneous' && (!data.group || data.group.trim() === '')) {
         return false;
     }
